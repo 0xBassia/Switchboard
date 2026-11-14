@@ -108,8 +108,7 @@ function canonicalFilePath(path) {
 function gitPathKey(root, path) {
   let canonicalRoot;
   try { canonicalRoot = realpathSync.native(root); } catch { canonicalRoot = resolve(root); }
-  const key = relative(canonicalRoot, canonicalFilePath(path));
-  return process.platform === "win32" ? key.replaceAll("\\", "/") : key;
+  return relative(canonicalRoot, canonicalFilePath(path));
 }
 
 function gitPathIsExcluded(root, path, excluded, foldedExcluded) {

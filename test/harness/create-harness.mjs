@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
-import { EXTRA_ARGS, SKILLS, WIN, relayPath } from "./constants.mjs";
+import { EXTRA_ARGS, SKILLS, relayPath } from "./constants.mjs";
 
 const harnessDir = dirname(fileURLToPath(import.meta.url));
 export const testDir = join(harnessDir, "..");
@@ -33,7 +33,7 @@ export function createHarness() {
   // kill(0) decides the answer; /proc only refines it, because a reaped-but-unwaited
   // child stays signalable on Linux while its state is "Z". Everywhere else /proc does
   // not exist, so the read throws and the catch must keep kill(0)'s verdict. Do NOT
-  // "fix" that catch to return false: on macOS and Windows every process would read as
+  // "fix" that catch to return false: on macOS every process would read as
   // dead and the whole timeout/abort matrix would pass without felling anything.
   const alive = (pid) => {
     try { process.kill(pid, 0); } catch { return false; }
@@ -57,7 +57,6 @@ export function createHarness() {
     alive,
     SKILLS,
     EXTRA_ARGS,
-    WIN,
     testDir,
     scratch,
     relayPath: (skill) => relayPath(testDir, skill),

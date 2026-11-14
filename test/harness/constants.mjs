@@ -12,8 +12,6 @@ export const EXTRA_ARGS = {
   warp: [],
 };
 
-export const WIN = process.platform === "win32";
-
 export const binaryName = (skill) => (skill === "cursor" ? "cursor-agent" : skill === "warp" ? "oz" : skill);
 
 export const skillDir = (skill) => `switchboard-${skill}`;

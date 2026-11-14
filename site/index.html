@@ -328,7 +328,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           </div>
           <div class="rule">
             <h3>No runaway processes</h3>
-            <p>The watchdog stops the whole process tree, grandchildren included. After the agent exits, anything it left in its process group is killed on macOS and Linux. An opt-in stall watchdog stops an agent that has gone silent long before the timeout.</p>
+            <p>The watchdog stops the whole process tree, grandchildren included. After the agent exits, anything it left in its process group is killed. An opt-in stall watchdog stops an agent that has gone silent long before the timeout.</p>
           </div>
           <div class="rule">
             <h3>Read-only you can check</h3>
@@ -405,7 +405,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
 
 <footer>
   <div class="wrap">
-    <span>Switchboard is MIT licensed. Node built-ins only.</span>
+    <span>Switchboard is MIT licensed. Node built-ins only. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).</span>
     <a href="https://github.com/0xBassia/switchboard">github.com/0xBassia/switchboard</a>
   </div>
 </footer>

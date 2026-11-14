@@ -30,7 +30,7 @@ export async function runOpencode(h) {
   const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
   h.check("opencode cost: step costs sum into totalCostUsd", value.totalCostUsd === 0.0035 && value.cost === 0.0035);
 }
-  for (const [flag, value] of [["--session", 'ses_x" & calc.exe & "'], ["--agent", "build & calc.exe"]]) {
+  for (const [flag, value] of [["--session", 'ses_x" & whoami & "'], ["--agent", "build & whoami"]]) {
     const outDir = join(h.scratch, `out-unsafe-${flag.slice(2)}-opencode`);
     const run = spawnSync(process.execPath, [h.relayPath("opencode"), "--brief", h.briefPath, "--cd", h.freshRepo(`work-unsafe-${flag.slice(2)}-opencode`), "--out-dir", outDir, "--model", "fake/model", flag, value],
       { env: { ...h.baseEnv, SMOKE_MODE: "opencode-success", SMOKE_ARGS_FILE: join(h.scratch, `args-unsafe-${flag.slice(2)}-opencode`) }, encoding: "utf8" });

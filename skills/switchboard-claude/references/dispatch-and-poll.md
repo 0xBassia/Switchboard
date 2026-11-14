@@ -43,8 +43,8 @@ node "<skill-dir>/scripts/relay.mjs" --brief brief.txt --cd /path/to/repo
 | `--dangerously-skip-permissions` | Opt into Claude's `bypassPermissions`; mutually exclusive with `--read-only`. |
 | `-h`, `--help` | Print the relay header and option reference. |
 
-Values that can reach an npm `claude.cmd` launch on Windows are token- or number-validated. The brief
-never reaches a shell command line.
+Flag values are token- or number-validated, and no shell runs. The brief never reaches a command
+line.
 
 ## What the relay runs
 
@@ -60,8 +60,7 @@ claude -p --output-format stream-json --verbose \
   < brief.txt
 ```
 
-On native Windows, `PowerShell` replaces `Bash` and is passed through `--allowedTools` because Claude's
-shell sandbox is unavailable there. Read-only uses `--tools Read,Glob,Grep --permission-mode plan`. A
+Read-only uses `--tools Read,Glob,Grep --permission-mode plan`. A
 specific session adds `--resume <id>`; the latest session adds `--continue`. The permission and tool
 profile is re-passed on every resumed invocation. When requested, `--autocompact <value>` is also
 re-passed on every new, `--resume`, or `--continue` invocation rather than assumed to persist from an
@@ -82,30 +81,27 @@ omits the Agent tool. These controls do not suppress project `CLAUDE.md` or norm
 
 Around the run, the relay keeps only absolute `PATH` entries (an empty or relative entry would
 resolve inside the checkout). After the implementer exits it sends SIGKILL to everything left in the
-implementer's process group (POSIX), so a background process the brief started, such as a dev server
+implementer's process group, so a background process the brief started, such as a dev server
 or a watcher, does not survive the run. A process that left the group (for example with `setsid`) is
-not covered, and on Windows leftovers keep running.
+not covered.
 
 ## Permission reach
 
 ### Normal write-capable profile
 
-The normal profile pairs `acceptEdits` with sandbox auto-approval on supported platforms.
+The normal profile pairs `acceptEdits` with sandbox auto-approval.
 `acceptEdits` accepts file edits but does not, by itself, approve ordinary shell gates in a headless
 run. `autoAllowBashIfSandboxed: true` approves commands that stay inside Claude's sandbox. A command
-that cannot stay sandboxed fails instead of being retried outside it. Native Windows is the explicit
-exception: the relay pre-approves PowerShell because no Claude shell sandbox is available there.
+that cannot stay sandboxed fails instead of being retried outside it.
 
 The generated `profile.json`:
 
 - uses string rules to deny common direct shell forms of `git commit`, `git push`, and nested
   `claude`, plus any command containing `switchboard-claude`; aliases, scripts, and wrappers can bypass
   these speed bumps, so the brief's no-commit instruction and orchestrator review remain the boundary;
-- on macOS, Linux, and WSL2, enables Claude's Bash sandbox with `failIfUnavailable: true`,
+- enables Claude's Bash sandbox with `failIfUnavailable: true`,
   `autoAllowBashIfSandboxed: true`, `allowUnsandboxedCommands: false`, and filesystem isolation
   explicitly enabled;
-- on native Windows, leaves the unsupported sandbox unconfigured and enables Claude's PowerShell
-  tool through its documented settings environment switch;
 - disables Claude.ai connectors for every profile.
 
 On supported platforms, the strict settings prevent a shell command from silently falling back to an
@@ -122,7 +118,7 @@ container or VM when only a host-level boundary is acceptable.
 
 ### Read-only profile
 
-`--read-only` removes Edit, Write, Bash/PowerShell, Agent, MCP, skills, and commands from the child and
+`--read-only` removes Edit, Write, Bash, Agent, MCP, skills, and commands from the child and
 uses `plan` mode. Your user-level hooks still load outside that tool surface and can write. The relay compares
 parsed `git status --porcelain -z -uall` and fingerprints working-tree identity and index entries for
 paths that were already dirty on every outcome, including aborts:
@@ -222,26 +218,13 @@ different: it exits 127 **with** `status: "claude_unavailable"`.
 - **`timeout`:** the relay sent termination to the whole process group/tree and escalated. The working
   tree may contain partial edits; inspect it before resuming or re-dispatching.
 - **`aborted`:** the relay caught SIGTERM, SIGINT, or SIGHUP, terminated the implementer tree, wrote an
-  outcome, then refreshed `touchedFiles` after a grace window. Native Windows cannot deliver every
-  termination as a catchable Node signal; a vanished relay with no result still requires direct
-  artifact/tree inspection.
+  outcome, then refreshed `touchedFiles` after a grace window.
 - **Host `SIGKILL`:** the relay cannot catch its own SIGKILL. If the child reports SIGKILL, investigate
   host memory or supervisor deadlines.
 - **Empty `finalMessage`:** inspect the raw events and diff. Require a closing report in the next brief.
 
 Never clean, reset, or switch branches before inspecting partial work, staged changes, and untracked
 files.
-
-## Windows launch
-
-The relay resolves PATH itself. A native `claude.exe` is spawned directly. An npm `claude.cmd` is
-invoked through `cmd.exe /d /v:off /s /c` with every argument quoted and user-selectable values
-restricted; stdin still carries the brief. `taskkill /t /f` terminates the process tree.
-
-The npm `claude.cmd` path has a recorded native Windows run covering write, resume, read-only,
-watchdog tree termination, and the missing-binary result; a directly spawned `claude.exe` is not yet
-verified. Claude's Bash sandbox is unsupported there, so that run verifies launch and termination
-mechanics, not the supported-platform shell boundary.
 
 ## The commit boundary
 

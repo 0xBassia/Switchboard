@@ -16,9 +16,9 @@ own `--cwd`.
 
 Around the run, the relay keeps only absolute `PATH` entries (an empty or relative entry would
 resolve inside the checkout). After the implementer exits it sends SIGKILL to everything left in the
-implementer's process group (POSIX), so a background process the brief started, such as a dev server
+implementer's process group, so a background process the brief started, such as a dev server
 or a watcher, does not survive the run. A process that left the group (for example with `setsid`) is
-not covered, and on Windows leftovers keep running.
+not covered.
 
 ## Flags
 
@@ -155,8 +155,7 @@ the whole process group (SIGTERM, then SIGKILL after 10s) and writes `status: "t
 
 If the relay itself is killed, it still writes `status: "aborted"`, forwards the kill to `oz`, and
 re-snapshots `touchedFiles` after a 2-second grace window so files flushed during shutdown are
-recorded. On Windows the process tree is felled with `taskkill /t /f`; Windows delivers no catchable
-SIGTERM, so the aborted path cannot be driven there.
+recorded.
 
 **A timed-out or aborted run leaves a partially edited tree.** Inspect `git status` and `git diff`
 before re-dispatching. If the state is incoherent, discard it against the recorded baseline rather

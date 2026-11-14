@@ -8,7 +8,6 @@ import { createHarness } from './harness/create-harness.mjs';
 import { installShim } from './harness/install-shim.mjs';
 
 const queueScript = fileURLToPath(new URL('../skills/switchboard-queue/scripts/queue.mjs', import.meta.url));
-const POSIX = process.platform !== 'win32';
 const GIT_ENV = {
   GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com',
   GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
@@ -27,7 +26,7 @@ function setup() {
   assert.equal(h.failed, 0);
   const home = join(h.scratch, 'home');
   mkdirSync(home);
-  const env = { ...h.baseEnv, ...GIT_ENV, HOME: home, USERPROFILE: home };
+  const env = { ...h.baseEnv, ...GIT_ENV, HOME: home };
   delete env.XDG_CONFIG_HOME;
   delete env.SMOKE_MODE;
   let counter = 0;
@@ -54,7 +53,7 @@ function setup() {
     outDir: () => join(h.scratch, `out${++counter}`),
     start(argv, extraEnv = {}) {
       const child = spawn(process.execPath, [queueScript, ...argv], {
-        env: { ...env, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+        env: { ...env, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stdout = '', stderr = '';
       child.stdout.on('data', c => { stdout += c; });
@@ -71,9 +70,7 @@ function setup() {
 
 const task = (id, extra = {}) => ({ id, brief: 'brief.md', implementer: 'codex', ...extra });
 const doc = (tasks, extra = {}) => ({ version: 'switchboard-queue.v1', tasks, ...extra });
-const removeShim = (h, key) => {
-  for (const ext of ['', '.cmd', '.exe']) rmSync(join(h.scratch, 'shim', key + ext), { force: true });
-};
+const removeShim = (h, key) => rmSync(join(h.scratch, 'shim', key), { force: true });
 
 test('usage errors exit 2, explain themselves, and write nothing', { timeout: 120000 }, async () => {
   const c = setup();
@@ -285,7 +282,7 @@ test('lanes resolve through the global config; an unknown lane is a usage error'
     writeFileSync(join(xdg, 'switchboard', 'config.json'), JSON.stringify({
       version: 'switchboard-fleet.v1', lanes: { builder: { implementer: 'codex' } },
     }));
-    const laneEnv = { XDG_CONFIG_HOME: xdg, HOME: c.home, USERPROFILE: c.home };
+    const laneEnv = { XDG_CONFIG_HOME: xdg, HOME: c.home };
 
     const out = c.outDir();
     const queue = c.queueFile(doc([{ id: 'laned', brief: 'brief.md', lane: 'builder' }]));
@@ -307,7 +304,7 @@ test('lanes resolve through the global config; an unknown lane is a usage error'
   } finally { c.h.cleanup(); }
 });
 
-test('abort: SIGTERM stops the running relay and skips unstarted tasks', { timeout: 120000, skip: !POSIX }, async () => {
+test('abort: SIGTERM stops the running relay and skips unstarted tasks', { timeout: 120000 }, async () => {
   const c = setup();
   try {
     const repo = c.repo();
@@ -548,7 +545,7 @@ test('the review record carries readOnlyViolation, not a made-up value', { timeo
   } finally { c.h.cleanup(); }
 });
 
-test('creating a worktree runs no hook and no smudge filter, and cleanup runs no clean filter', { skip: !POSIX, timeout: 180000 }, async () => {
+test('creating a worktree runs no hook and no smudge filter, and cleanup runs no clean filter', { timeout: 180000 }, async () => {
   const c = setup();
   try {
     const repo = c.repo();

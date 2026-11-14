@@ -1,26 +1,26 @@
 // Process control: launch an implementer in its own process group and fell the
 // whole tree on the way out.
 
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { constants } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute } from "node:path";
 
-export const IS_WIN = process.platform === "win32";
+// Switchboard runs on macOS, Linux and WSL. Native Windows is refused up front,
+// before any artifact exists, rather than half-supported.
+export function refuseNativeWindows() {
+  if (process.platform !== "win32") return;
+  process.stderr.write("switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
+  process.exit(2);
+}
 
-// Windows looks for a bare command in the current directory before PATH: cmd.exe
-// always, CreateProcess unless this variable is set. The --cd checkout is untrusted,
-// so it must never get to supply `git`, `taskkill` or the implementer itself. The
-// implementer inherits it, which is the safe default there too.
 // POSIX lookup treats an empty or relative PATH entry (a stray ":" from PATH=$X:$PATH)
 // as a directory relative to the child's cwd, which is the untrusted --cd checkout, so
 // only absolute entries are kept, for the relay and everything it starts.
 export function guardExePath() {
-  if (IS_WIN && !process.env.NoDefaultCurrentDirectoryInExePath) process.env.NoDefaultCurrentDirectoryInExePath = "1";
-  for (const key of Object.keys(process.env).filter((name) => name.toUpperCase() === "PATH")) {
-    const entries = process.env[key].split(IS_WIN ? ";" : ":");
-    const kept = entries.filter((entry) => isAbsolute(entry.replace(/^"(.*)"$/, "$1")));
-    if (kept.length !== entries.length) process.env[key] = kept.join(IS_WIN ? ";" : ":");
-  }
+  if (process.env.PATH === undefined) return;
+  const entries = process.env.PATH.split(":");
+  const kept = entries.filter((entry) => isAbsolute(entry));
+  if (kept.length !== entries.length) process.env.PATH = kept.join(":");
 }
 
 export function signalExitCode(signal, fallback = 15) {
@@ -29,19 +29,6 @@ export function signalExitCode(signal, fallback = 15) {
 
 export function killChild(child, signal = "SIGTERM") {
   if (!child || !child.pid) return;
-  if (process.platform === "win32") {
-    if (signal !== "SIGTERM") return;
-    guardExePath();
-    try {
-      // By full path: PATH (even with only absolute entries) never supplies it.
-      execFileSync(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(child.pid), "/t", "/f"], {
-        stdio: ["ignore", "ignore", "inherit"],
-      });
-    } catch {
-      // The process tree already exited.
-    }
-    return;
-  }
   try {
     process.kill(-child.pid, signal);
   } catch {
@@ -53,22 +40,18 @@ export function killChild(child, signal = "SIGTERM") {
   }
 }
 
-// launch: { command, args, shell?, verbatim?, env?, cwd?, stdin? }
-// POSIX children lead a new process group so killChild reaches grandchildren.
-// With `shell` the command line is serialized once (Node 24 warns on shell:true
-// plus an args array); callers must pass only token-validated or quoted args.
+// launch: { command, args, env?, cwd?, stdin? }
+// Children lead a new process group so killChild reaches grandchildren. No shell
+// ever runs: the command and its args go to execve as they are.
 export function spawnLaunch(launch, extra = {}) {
   guardExePath();
   const options = {
     cwd: launch.cwd,
-    env: IS_WIN ? { NoDefaultCurrentDirectoryInExePath: "1", ...(launch.env || process.env) } : (launch.env || process.env),
+    env: launch.env || process.env,
     stdio: [launch.stdin === undefined || launch.stdin === null ? "ignore" : "pipe", "pipe", "pipe"],
-    detached: !IS_WIN,
-    windowsHide: true,
-    ...(launch.verbatim ? { windowsVerbatimArguments: true } : {}),
+    detached: true,
     ...extra,
   };
-  if (launch.shell) return spawn([launch.command, ...launch.args].join(" "), { ...options, shell: true });
   return spawn(launch.command, launch.args, options);
 }
 
@@ -76,7 +59,7 @@ export function spawnLaunch(launch, extra = {}) {
 // { version, error }. `version` is null with no error when the binary is
 // missing; any other failure is an error, shaped like execFileSync's
 // (code: "ETIMEDOUT" | status | stderr), so a broken CLI is never dispatched to.
-export function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), onChild, missing } = {}) {
+export function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), onChild } = {}) {
   return new Promise((done) => {
     let child;
     try {
@@ -96,14 +79,13 @@ export function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), o
       clearTimeout(timer);
       // Whatever the outcome, nothing the probe started may outlive it: a --version that
       // forks a background child would otherwise keep running through dispatch.
-      // POSIX process group only (SIGKILL is a no-op on Windows).
       killChild(child, "SIGKILL");
       if (onChild) onChild(null);
       done(value);
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      killChild(child, IS_WIN ? "SIGTERM" : "SIGKILL");
+      killChild(child, "SIGKILL");
       child.stdout.destroy();
       child.stderr.destroy();
       // If the kill cannot land, "close" may never fire; do not wait on it.
@@ -119,10 +101,6 @@ export function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), o
         finish({ version: null, error: Object.assign(new Error("version probe timed out"), { code: "ETIMEDOUT", stderr }) });
         return;
       }
-      if (missing && missing(code, stderr)) {
-        finish({ version: null, error: null });
-        return;
-      }
       if (code !== 0) {
         finish({ version: null, error: Object.assign(new Error(`version probe exited ${code ?? signal}`), { status: code, signal, stderr }) });
         return;
@@ -130,9 +108,4 @@ export function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), o
       finish({ version: parse(stdout, stderr) || "unknown", error: null });
     });
   });
-}
-
-// cmd.exe reports a missing command as exit 9009 or "is not recognized" text.
-export function cmdShimMissing(code, stderr) {
-  return IS_WIN && (code === 9009 || /is not recognized as an internal or external command/i.test(stderr));
 }

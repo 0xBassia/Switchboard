@@ -31,7 +31,7 @@ if (versionProbe && process.env.SMOKE_PREFLIGHT_ENV_FILE) {
 if (versionProbe && process.env.SMOKE_PREFLIGHT_PID_FILE) {
   fs.writeFileSync(process.env.SMOKE_PREFLIGHT_PID_FILE, String(process.pid));
 }
-if (versionProbe && /-spawn-error$/.test(process.env.SMOKE_MODE || "") && process.platform !== "win32") {
+if (versionProbe && /-spawn-error$/.test(process.env.SMOKE_MODE || "") ) {
   const key = process.env.SMOKE_MODE.replace(/-spawn-error$/, "");
   fs.renameSync(require("node:path").join(__dirname, key), require("node:path").join(__dirname, key + ".removed"));
   console.log(fakeVersion);
@@ -86,7 +86,7 @@ if (process.env.SMOKE_MODE === "capture") {
   // Lets a test choose codex's final report (its -o file), e.g. a reviewer's verdict.
   const reportAt = args.indexOf("-o");
   if (process.env.SMOKE_FINAL_TEXT && reportAt !== -1) {
-    fs.writeFileSync(args[reportAt + 1].replace(/^"(.*)"$/, "$1"), process.env.SMOKE_FINAL_TEXT);
+    fs.writeFileSync(args[reportAt + 1], process.env.SMOKE_FINAL_TEXT);
   }
   if (process.env.SMOKE_ENV_FILE) fs.writeFileSync(process.env.SMOKE_ENV_FILE, JSON.stringify(capturedEnv()));
   process.exit(0);
@@ -115,8 +115,8 @@ if (process.env.SMOKE_GIT_RENAME_FROM && process.env.SMOKE_GIT_RENAME_TO) {
   ]);
 }
 if (process.env.SMOKE_MODE === "orphan-holds-stdio") {
-  // The normal-exit twin of the timeout-tree cases. codex spawns a shell per command, and on
-  // Windows a grandchild routinely outlives it; because that grandchild inherited the pipes,
+  // The normal-exit twin of the timeout-tree cases. codex spawns a shell per command, and a
+  // grandchild can outlive it; because that grandchild inherited the pipes,
   // the relay's stdout/stderr stay open after codex itself is gone. "exit" fires, "close"
   // never does, and a relay that only settles on "close" waits forever and writes no result.
   // Unlike the timeout-tree fixture (stdio: "ignore") this grandchild inherits, which is the
@@ -126,11 +126,10 @@ if (process.env.SMOKE_MODE === "orphan-holds-stdio") {
   console.log("fake implementer completed");
   const outAt = args.indexOf("-o");
   if (outAt !== -1) {
-    // The relay quotes the path on Windows; strip that before writing.
-    fs.writeFileSync(args[outAt + 1].replace(/^"(.*)"$/, "$1"), "fake codex completed" + "\n");
+    fs.writeFileSync(args[outAt + 1], "fake codex completed" + "\n");
   }
   // detached AND inheriting: it is the pair that holds the pipes. An attached grandchild
-  // that inherits still lets "close" fire (verified on Windows/Node 24), so a fixture
+  // that inherits still lets "close" fire, so a fixture
   // without detached would pass against the unpatched relay and prove nothing.
   const grand = require("node:child_process").spawn(
     process.execPath, ["-e", "setTimeout(() => {}, 60000)"],

@@ -42,26 +42,4 @@ for (const skill of ["codex", "opencode", "warp"]) {
     existsSync(join(missingOutDir, "result.json")) &&
     h.result(missingOutDir).status === `${skill}_unavailable`);
 }
-
-// Node 24 warns for shell:true plus an args array. Exercise both each .cmd
-// version probe and its dispatch through the native Windows shim harness.
-if (h.WIN && Number(process.versions.node.split(".")[0]) >= 24) {
-  for (const skill of ["codex", "opencode", "pi"]) {
-    const workDir = h.freshRepo(`work-dep0190-${skill}`);
-    const outDir = join(h.scratch, `out-dep0190-${skill}`);
-    const argsPath = join(h.scratch, `args-dep0190-${skill}.json`);
-    const env = { ...h.baseEnv, SMOKE_MODE: "capture", SMOKE_ARGS_FILE: argsPath };
-    const run = spawnSync(process.execPath, [
-      h.relayPath(skill),
-      "--brief", h.briefPath,
-      "--cd", workDir,
-      "--out-dir", outDir,
-      "--timeout", "10s",
-      ...h.EXTRA_ARGS[skill],
-    ], { env, encoding: "utf8", timeout: 20_000 });
-    const passed = existsSync(argsPath) && !run.stderr.includes("DEP0190");
-    if (!passed) console.error(`${skill} Windows launch diagnostics: status=${run.status}, captured=${existsSync(argsPath)}, stderr=${run.stderr}`);
-    h.check(`${skill} Windows Node 24 launch: version probe and dispatch avoid DEP0190`, passed);
-  }
-}
 }

@@ -8,7 +8,7 @@ description: >-
   reviewer. Prefer it when the user will review the diff and commit it themselves. DO NOT USE for tasks
   small enough to do inline, or when the user wants the code written directly without delegating.
 license: MIT
-compatibility: Requires the `opencode` CLI installed and authenticated, Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Shell examples assume bash/zsh (macOS/Linux, or Git Bash/WSL on Windows).
+compatibility: Requires the `opencode` CLI installed and authenticated, Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). Shell examples assume bash/zsh.
 metadata:
   version: 1.1.0
 ---
@@ -102,8 +102,8 @@ when it returns:
 
 - **Claude Code:** run the Bash call with `run_in_background: true`; you are notified on completion.
 - **Plain shell / other agents:** run it in the foreground for short tasks, or background it and poll
-  the result file — `… &` in bash/zsh (including Git Bash/WSL), or your shell's equivalent (`Start-Job`
-  in PowerShell, `start /b` in cmd). The run is done when `result.json` exists with a `status`. (A
+  the result file — `… &` in bash/zsh, or your shell's equivalent. The run is done when `result.json`
+  exists with a `status`. (A
   pre-run usage error — bad args or an empty brief — instead exits with code 2 and writes no result
   file, so check the exit code too. A missing `opencode` binary exits 127 but *does* write a
   `result.json` with status `opencode_unavailable`.)

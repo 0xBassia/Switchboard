@@ -42,7 +42,6 @@
  *     match: RegExp,
  *   },
  *   supports: Dial[],
- *   winShell: boolean,
  * }[]}
  */
 export const IMPLEMENTERS = Object.freeze([
@@ -63,7 +62,6 @@ export const IMPLEMENTERS = Object.freeze([
       match: /\.jsonl$/,
     },
     supports: ["model", "effort", "timeout", "readOnly"],
-    winShell: true,
   },
   {
     key: "codex",
@@ -94,7 +92,6 @@ export const IMPLEMENTERS = Object.freeze([
       match: /^rollout-.*\.jsonl$/,
     },
     supports: ["model", "effort", "sandbox", "timeout", "readOnly"],
-    winShell: true,
   },
   {
     key: "opencode",
@@ -111,7 +108,6 @@ export const IMPLEMENTERS = Object.freeze([
     usageProbe: null,
     // OpenCode reasoning intensity is --variant, not --effort.
     supports: ["model", "variant", "timeout", "readOnly"],
-    winShell: true,
   },
   {
     key: "cursor",
@@ -135,7 +131,6 @@ export const IMPLEMENTERS = Object.freeze([
     },
     // Cursor sandbox is explicit per dispatch only; it is intentionally not a fleet dial.
     supports: ["model", "force", "timeout", "readOnly"],
-    winShell: true,
   },
   {
     key: "pi",
@@ -153,7 +148,6 @@ export const IMPLEMENTERS = Object.freeze([
       match: /\.jsonl$/,
     },
     supports: ["provider", "model", "timeout", "readOnly"],
-    winShell: true,
   },
   {
     key: "omp",
@@ -174,7 +168,6 @@ export const IMPLEMENTERS = Object.freeze([
       match: /\.jsonl$/,
     },
     supports: ["provider", "model", "effort", "timeout", "readOnly"],
-    winShell: false,
   },
   {
     key: "warp",
@@ -197,7 +190,6 @@ export const IMPLEMENTERS = Object.freeze([
     // `oz agent run` exposes no sandbox, permission-mode, or read-only flag, so
     // those dials are deliberately absent — the relay refuses a lane that sets one.
     supports: ["model", "timeout"],
-    winShell: false,
   },
 ]);
 

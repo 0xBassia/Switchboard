@@ -14,7 +14,7 @@ load-bearing rules in the brief anyway — the brief is the contract.
 Pi uses its configured default model when `--model` is omitted, so a fresh dispatch does not
 require it. Pass `--model <id>` only when the human asked for a specific model, choosing from
 `pi --list-models`. The relay forwards explicit ids and patterns (letters, digits, `. _ : / -`);
-glob patterns with `*` are rejected because the value reaches a shell on Windows.
+glob patterns with `*` are rejected.
 
 A resumed run keeps the session context. Send only the delta brief with `--resume-last` or
 `--session <id>`.

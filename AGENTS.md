@@ -83,20 +83,16 @@ CLI flag, field, and command in the docs must match the installed implementer CL
 - Rebuild relays after any `src/` change: `node tools/build.mjs`, then `node --test test/core.test.mjs`.
 - Smoke-test any changed script directly (e.g. `node skills/<skill>/scripts/relay.mjs --help`, and a
   no-write or read-only run against a throwaway repo) before relying on it.
-- If you touch how a `relay.mjs` launches its implementer CLI, smoke-test on Windows too (native
-  PowerShell/cmd, not just Git Bash/WSL): the `codex`, `opencode`, `pi`, `claude`, and `cursor-agent`
-  installs use `.cmd` shims, which launch through `cmd.exe`. The `claude` and `cursor-agent` launches
-  serialize a pre-joined command string through the shell for the same shim reason. Spaceable args are
-  quoted, and all value flags are token-validated. `omp` and `oz` installs
-  use native binaries. The `oz` launch must never gain a shell on any platform: `oz agent run` takes the
-  brief as its `--prompt` argv value (its `-f/--file` config path does not satisfy the required prompt
-  group), and a shell would reinterpret that text. Each changed launch still needs its own Windows
-  smoke before claiming support.
+- Supported platforms are macOS, Linux and WSL; native Windows is not supported (use WSL), and every
+  entry point refuses it with exit 2. Do not add Windows code paths back.
+- If you touch how a `relay.mjs` launches its implementer CLI, keep it shell-free: every relay spawns
+  its CLI directly with an argv array, and all value flags are token-validated. The `oz` launch matters
+  most: `oz agent run` takes the brief as its `--prompt` argv value (its `-f/--file` config path does
+  not satisfy the required prompt group), and a shell would reinterpret that text.
 - Keep the README's "Verification status" honest — claim only what's been run.
 
 ## Local Claude Code config
 
 Claude Code reads `CLAUDE.md`, not `AGENTS.md`. If you want this file active while working here in
-Claude Code, symlink it (it's gitignored): `ln -s AGENTS.md CLAUDE.md` (macOS/Linux, or Windows Git
-Bash/WSL). On native Windows PowerShell use `New-Item -ItemType SymbolicLink -Target AGENTS.md -Path
-CLAUDE.md`, or just copy it with `cp`/`copy` if you don't need a live link.
+Claude Code, symlink it (it's gitignored): `ln -s AGENTS.md CLAUDE.md`, or just copy it with `cp` if
+you don't need a live link.

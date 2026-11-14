@@ -8,7 +8,7 @@ description: >-
   separate Claude session." Do not trigger merely because the current orchestrator is Claude, and do
   not use when the user asks the current Claude to implement directly without delegation.
 license: MIT
-compatibility: Requires the `claude` CLI (Claude Code) installed and authenticated, Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Claude's shell sandbox requires macOS, Linux, or WSL2; on native Windows the npm `claude.cmd` launch is verified and a direct `claude.exe` launch is pending verification. The optional --autocompact flag requires claude 2.1.221 or newer.
+compatibility: Requires the `claude` CLI (Claude Code) installed and authenticated, Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). The optional --autocompact flag requires claude 2.1.221 or newer.
 metadata:
   version: 1.1.0
 ---
@@ -127,8 +127,8 @@ Review a resumed run exactly like the first run.
 The normal profile is deliberately explicit:
 
 - `acceptEdits` permission mode.
-- Built-in tools restricted to Read, Glob, Grep, Edit, Write, and the platform shell.
-- On macOS, Linux, and WSL2, Claude's shell sandbox is enabled with startup failure on missing
+- Built-in tools restricted to Read, Glob, Grep, Edit, Write, and Bash.
+- Claude's shell sandbox is enabled with startup failure on missing
   dependencies and no unsandboxed retry. Commands that stay sandboxed are auto-approved so ordinary
   gates can run headlessly. The sandbox governs shell processes and their children only; merged
   local or managed sandbox settings can add effective paths or exclusions.
@@ -140,12 +140,6 @@ The normal profile is deliberately explicit:
 - String rules deny common direct shell forms of `git commit`, `git push`, and nested `claude`, plus
   any command containing `switchboard-claude`. Aliases, scripts, and wrappers can bypass them, so they
   are only a speed bump; the brief's no-commit instruction and orchestrator review remain the boundary.
-
-Native Windows does not support Claude's shell sandbox. The relay restricts the tool surface and
-pre-approves PowerShell so the run remains non-interactive, but that shell is not OS-isolated. Native
-`claude.exe` and npm `claude.cmd` launch paths are implemented. The `claude.cmd` path has a recorded
-native Windows run (see the README's Verification status); a directly spawned `claude.exe` is not yet
-verified.
 
 `--project-settings` adds the repository's `.claude/settings.json` and `settings.local.json`
 (hooks included) to what Claude loads, by passing `--setting-sources user,project,local`. The default is

@@ -88,7 +88,7 @@ export function exclusive(opts, pairs) {
   }
 }
 
-// Briefs saved by Windows PowerShell 5.1 (`>` and Out-File) are UTF-16 with a BOM;
+// Some editors and PowerShell (`>` and Out-File) save briefs as UTF-16 with a BOM;
 // decode the common BOMs instead of dispatching mojibake, and refuse NUL bytes, which
 // no CLI's argv accepts anyway.
 function decodeBrief(bytes, label) {

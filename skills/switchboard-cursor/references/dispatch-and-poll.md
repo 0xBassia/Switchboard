@@ -12,8 +12,7 @@ cursor-agent status
 ```
 
 Follow the installer for your platform at [cursor.com/cli](https://cursor.com/cli), inspect what it
-will run, then authenticate with `cursor-agent login`. On Windows the CLI installs as a `.cmd` shim;
-the relay handles that launch itself, no setup needed.
+will run, then authenticate with `cursor-agent login`.
 
 ## Dispatching
 
@@ -112,17 +111,14 @@ A pre-run usage error exits 2 and writes no result. A missing `cursor-agent` exi
   dispatched.
 - **`status: "aborted"`:** the relay itself was killed (its parent's timeout, a stopped task, a
   closed terminal) and forwarded the kill to cursor-agent. The result is written before the relay
-  exits; inspect the working tree before re-dispatching. On native Windows a hard kill of the relay
-  is uncatchable (Node supports no `SIGTERM` handler there), so this status may never get written —
-  a relay process that is gone without a `result.json` is an aborted run; inspect the working tree
-  and `events.jsonl` directly.
+  exits; inspect the working tree before re-dispatching.
 - **`status: "failed"` with `signal: "SIGKILL"`:** the host killed the process, commonly through the
   OOM killer or a supervisor timeout. This is not a Cursor error; check host memory and re-dispatch,
   or split the task into smaller briefs.
 - **`status: "timeout"`:** the `--timeout` watchdog killed the run; `error` reads
   `cursor-agent did not finish within --timeout <dur>; killed by the relay watchdog`. Increase
   `--timeout` or split the task. The relay sends SIGTERM, waits 10 seconds, then sends SIGKILL if
-  needed (on Windows a single process-tree kill).
+  needed.
 - **`status: "stalled"`:** `--stall-timeout` was passed and cursor-agent emitted nothing for that
   long while no tool call was in flight; the relay killed it the same way as `timeout`. Observed on
   Linux with `cursor-agent` 2026.10.01-e373342 (`composer-2.5`): after finishing its edits and gates
@@ -133,16 +129,6 @@ A pre-run usage error exits 2 and writes no result. A missing `cursor-agent` exi
   (`--session <id>`) with a delta brief asking it to finish and report.
 - **Empty `finalMessage`:** inspect `touchedFiles` and the diff. Add a
   `<structured_output_contract>` to the next brief to require a closing report.
-- **Every command Cursor runs is rejected with "Hook blocked with message: … eval: … syntax error
-  near unexpected token `&`" (or Cursor reports "the terminal hook failed"):** a cursor-agent bug,
-  not a hook bug. When cursor-agent is launched from a Git Bash (MSYS) console on Windows — which
-  is what an orchestrator's bash tool uses — it selects `bash.exe` as its persistent shell while
-  still generating its hook wrappers in PowerShell syntax, so every configured hook (its own
-  `~/.cursor/hooks.json` and any imported Claude Code `PreToolUse` hooks) errors and Cursor blocks
-  the command, fail-closed. File edits still work; command execution does not — which also means
-  Cursor cannot run the gates, only claim it could not. Workaround: dispatch the relay from a
-  PowerShell or cmd console instead (observed fixed there); or temporarily remove the hook entries
-  for the run. Verified on cursor-agent 2026.07.23.
 
 ## Recovering lost work
 
@@ -168,15 +154,13 @@ cursor-agent --print --output-format stream-json --trust \
 commands are refused.
 
 The brief rides stdin, so it is not visible in the host process list and has no OS argument-size
-cap. On Windows the launch goes through the shell so the `cursor-agent.cmd` shim resolves; the brief
-still travels on stdin, sandbox, model, session, and directory values are validated, and spaceable
-values are quoted.
+cap. No shell runs; sandbox, model, and session values are validated before they ride argv.
 
 Around the run, the relay keeps only absolute `PATH` entries (an empty or relative entry would
 resolve inside the checkout). After the implementer exits it sends SIGKILL to everything left in the
-implementer's process group (POSIX), so a background process the brief started, such as a dev server
+implementer's process group, so a background process the brief started, such as a dev server
 or a watcher, does not survive the run. A process that left the group (for example with `setsid`) is
-not covered, and on Windows leftovers keep running.
+not covered.
 
 ## The commit boundary
 

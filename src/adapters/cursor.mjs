@@ -5,14 +5,14 @@
  * capture the run, and write a structured result the orchestrating agent can
  * review. The orchestrator runs this one command and reads the result JSON —
  * every Cursor-specific mechanic lives in here, which keeps the skill
- * orchestrator-agnostic. Verified against cursor-agent 2026.07.23 on Windows.
+ * orchestrator-agnostic. Smoke-tested in plan mode against cursor-agent
+ * 2026.07.23 on macOS.
  *
  * Trust posture: relay.mjs itself makes no network calls, reads or writes no
  * credentials, and sends no telemetry; it has no dependencies (Node built-ins
- * only). It shells out only to `cursor-agent` and `git` (plus taskkill on
- * Windows for process-tree termination). The `cursor-agent` process it
- * launches does authenticate — exactly as you do at the terminal. Read this
- * file before you run it.
+ * only). It shells out only to `cursor-agent` and `git`. The `cursor-agent`
+ * process it launches does authenticate — exactly as you do at the terminal.
+ * Read this file before you run it.
  *
  * The brief is fed on the child's stdin, never argv, so it is not visible in
  * the host process list and has no OS argument-size cap.
@@ -82,7 +82,6 @@
 import { resolve } from "node:path";
 import { exclusive, fail } from "../core/cli.mjs";
 import { parseDuration } from "../core/duration.mjs";
-import { IS_WIN, cmdShimMissing } from "../core/proc.mjs";
 import { runRelay } from "../core/relay.mjs";
 import { makeEventScanner } from "../core/scan.mjs";
 import { tripwire } from "../core/tripwire.mjs";
@@ -90,14 +89,6 @@ import { tripwire } from "../core/tripwire.mjs";
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:@/[\],=-]*$/;
 const SAFE_SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const SANDBOX_MODES = ["enabled", "disabled"];
-
-// shell:true on win32 (needed for the cursor-agent.cmd shim) does not quote
-// args, so a path with spaces would split, and a parameterized model
-// ("opus[context=1m,effort=high]") would be re-tokenized by the shim's
-// PowerShell hop. Quote those values on Windows only; on POSIX the quotes
-// would become literal characters.
-// A trailing backslash (a drive-root path) would escape the closing quote, so it is doubled.
-const winq = (value) => (IS_WIN ? `"${value.replace(/(\\+)$/, "$1$1")}"` : value);
 
 const cursor = {
   key: "cursor",
@@ -131,9 +122,6 @@ const cursor = {
     // cursor-agent resolves a relative --add-dir against ITS cwd, so resolve
     // against --cd, which may appear after --add-dir on the command line.
     opts.addDirs = opts.addDirs.map((dir) => resolve(opts.cd, dir));
-    if (IS_WIN && opts.addDirs.some((dir) => /[\0\r\n"%!]/.test(dir))) {
-      fail("--add-dir cannot contain %, !, a quote, or a newline when cursor-agent launches through cmd.exe");
-    }
     if (opts.stallTimeout !== null && parseDuration(opts.stallTimeout) === null) {
       fail(`--stall-timeout "${opts.stallTimeout}" is invalid or too long; use a positive h/m/s duration no longer than about 24 days`);
     }
@@ -160,9 +148,7 @@ const cursor = {
     permissionMode: state.permissionMode,
     usage: state.usage,
   }),
-  // A shell launch on win32 resolves the cursor-agent.cmd shim; cmd.exe then
-  // reports a missing command as exit 9009 rather than ENOENT.
-  version: () => ({ launch: { command: "cursor-agent", args: ["--version"], shell: IS_WIN }, missing: cmdShimMissing }),
+  version: () => ({ launch: { command: "cursor-agent", args: ["--version"] } }),
   binary: "cursor-agent",
   unavailableHint: "Install the Cursor CLI (https://cursor.com/cli) and run `cursor-agent login`.",
   launch(opts, brief) {
@@ -170,12 +156,12 @@ const cursor = {
     if (opts.readOnly) args.push("--mode", "plan");
     else if (opts.force) args.push("--force");
     if (opts.sandbox) args.push("--sandbox", opts.sandbox);
-    if (opts.model) args.push("--model", winq(opts.model));
-    if (opts.session) args.push("--resume", winq(opts.session));
+    if (opts.model) args.push("--model", opts.model);
+    if (opts.session) args.push("--resume", opts.session);
     else if (opts.resumeLast) args.push("--continue");
-    for (const dir of opts.addDirs) args.push("--add-dir", winq(dir));
+    for (const dir of opts.addDirs) args.push("--add-dir", dir);
     // The brief rides stdin: no process-list exposure, no OS argv-size cap.
-    return { command: "cursor-agent", args, shell: IS_WIN, stdin: brief };
+    return { command: "cursor-agent", args, stdin: brief };
   },
   // Cursor streams nothing between a tool call's started and completed events,
   // however long the command runs, so the stall clock pauses while one is open.

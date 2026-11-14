@@ -11,9 +11,7 @@ export async function runWarp(h) {
     h.relayPath("warp"), "--brief", h.briefPath, "--cd", workDir, "--out-dir", join(h.scratch, "out-warp"),
     "--profile", "team-profile", "--skill", "review-skill", "--no-snapshot", "--conversation", "conv-123",
   ], { env: { ...h.baseEnv, SMOKE_MODE: "capture", SMOKE_ARGS_FILE: argsFile }, encoding: "utf8" });
-  const args = !existsSync(argsFile) ? [] : h.WIN
-    ? readFileSync(argsFile, "utf8").split(/\r?\n/).filter(Boolean)
-    : JSON.parse(readFileSync(argsFile, "utf8"));
+  const args = existsSync(argsFile) ? JSON.parse(readFileSync(argsFile, "utf8")) : [];
   h.check("warp: the relay runs oz agent run with ndjson output", run.status === 0 && args[0] === "agent" && args[1] === "run" && h.pair(args, "--output-format", "ndjson"));
   h.check("warp: --cwd pins the working directory", h.pair(args, "--cwd", workDir));
   h.check("warp: --profile, --skill and --conversation reach oz", h.pair(args, "--profile", "team-profile") && h.pair(args, "--skill", "review-skill") && h.pair(args, "--conversation", "conv-123"));

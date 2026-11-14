@@ -65,10 +65,6 @@ import { constants, devNull, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Windows looks for a bare command (`git`, `taskkill`) in the current directory before
-// PATH; the checkout is untrusted, so never let it supply one.
-if (process.platform === "win32" && !process.env.NoDefaultCurrentDirectoryInExePath) process.env.NoDefaultCurrentDirectoryInExePath = "1";
-
 const QUEUE_VERSION = "switchboard-queue.v1";
 const RESULT_SCHEMA = "switchboard-queue.result.v1";
 const TASK_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -94,6 +90,14 @@ function fail(message, code = 2) {
   process.exit(code);
 }
 
+// Switchboard runs on macOS, Linux and WSL; native Windows is refused (exit 2) before
+// anything is read or written. --help still answers.
+function refuseNativeWindows() {
+  if (process.platform !== "win32") return;
+  process.stderr.write("switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
+  process.exit(2);
+}
+
 function help() {
   const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
   const match = src.match(/\/\*\*([\s\S]*?)\*\//);
@@ -111,10 +115,7 @@ function help() {
   process.env.GIT_CONFIG_COUNT = String(count + 1);
 }
 // An empty or relative PATH entry would resolve inside the checkout; keep absolute ones only.
-for (const key of Object.keys(process.env).filter((name) => name.toUpperCase() === "PATH")) {
-  process.env[key] = process.env[key].split(process.platform === "win32" ? ";" : ":")
-    .filter((entry) => isAbsolute(entry.replace(/^"(.*)"$/, "$1"))).join(process.platform === "win32" ? ";" : ":");
-}
+if (process.env.PATH !== undefined) process.env.PATH = process.env.PATH.split(":").filter((entry) => isAbsolute(entry)).join(":");
 
 // Every git call the queue makes runs without hooks (a checkout runs post-checkout) and
 // with every clean, smudge and process filter git knows of switched off by name: a
@@ -244,7 +245,7 @@ function parseQueue(text, baseDir) {
     const where = `tasks[${index}]`;
     if (!task || typeof task !== "object") fail(`${where} must be an object`);
     if (typeof task.id !== "string" || !validTaskId(task.id)) fail(`${where}: "id" must match ${TASK_ID} with no "..", trailing "." or ".lock" (it names a git branch)`);
-    // Ids name directories and branches, which collide by case on macOS and Windows.
+    // Ids name directories and branches, which collide by case on macOS.
     if (seen.has(task.id.toLowerCase())) fail(`${where}: duplicate id "${task.id}" (ids must differ by more than letter case)`);
     seen.add(task.id.toLowerCase());
     if (typeof task.brief !== "string" || !task.brief) fail(`${task.id}: "brief" must be a path`);
@@ -488,7 +489,7 @@ function runRelay(task, target, cwd, attemptDir, running) {
         if (child) { child.stdout.resume(); child.stderr.resume(); }
       });
     } catch { /* best effort: the relay's own artifacts still land in attemptDir */ }
-    child = spawn(process.execPath, args, { cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    child = spawn(process.execPath, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     running.add(child);
     if (output) {
       child.stdout.pipe(output, { end: false });
@@ -509,15 +510,9 @@ function runRelay(task, target, cwd, attemptDir, running) {
   });
 }
 
-// POSIX: SIGTERM lets each relay record its own aborted result and fell its
-// implementer's process group. Windows has no catchable SIGTERM (kill() is a
-// hard terminate that would orphan the implementer), so fell the whole tree.
+// SIGTERM lets each relay record its own aborted result and fell its
+// implementer's process group.
 function stopRelay(child) {
-  if (process.platform === "win32") {
-    // By full path: PATH never supplies it.
-    spawnSync(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
-    return;
-  }
   try { child.kill("SIGTERM"); } catch { /* already gone */ }
 }
 
@@ -552,7 +547,7 @@ async function runTask(task, ctx) {
     record.attempts.push({
       target: target.lane ? { lane: target.lane } : { implementer: target.implementer },
       implementer: target.implementer,
-      // A relay felled during an abort (Windows has no catchable SIGTERM) leaves no result.
+      // A relay felled during an abort before it could record one leaves no result.
       status: result?.status ?? (ctx.aborting ? "aborted" : outcome.code === 2 ? "rejected" : "failed"),
       exitCode: result?.exitCode ?? outcome.code,
       resultPath: result ? join(attemptDir, "result.json") : null,
@@ -786,6 +781,7 @@ function cleanup(argv) {
 
 const [command, ...rest] = process.argv.slice(2);
 if (command === "-h" || command === "--help" || command === undefined) help();
-else if (command === "run") await run(rest);
+refuseNativeWindows();
+if (command === "run") await run(rest);
 else if (command === "cleanup") cleanup(rest);
 else fail(`unknown command: ${command} (expected run or cleanup)`);

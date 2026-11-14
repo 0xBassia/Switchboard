@@ -212,8 +212,7 @@ Four invariants hold for every implementer skill. They are also the bar for a ne
   not a gateway — an implementer whose work you can read with `git diff`.
 - **The relay never commits.** Committing belongs to the reviewer, always.
 - **Node built-ins only.** No dependencies, no network calls of its own, no credentials, no telemetry.
-  The relay launches its implementer CLI and `git`, plus the platform process launcher where a Windows
-  shim or a process-tree kill needs one.
+  The relay launches its implementer CLI and `git`, never through a shell.
 - **Autonomy is stated in the CLI's own terms**, and whatever it cannot enforce is said plainly — see
   the table above.
 
@@ -237,7 +236,9 @@ Full checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
 - For `switchboard-claude` write runs on Linux/WSL2: `bubblewrap` and `socat`, which Claude Code's shell
   sandbox needs. Without them the relay fails safe instead of running unsandboxed.
 - An orchestrating agent that can run shell commands and read files.
-- Shell examples assume bash/zsh (macOS/Linux, or Git Bash/WSL on Windows).
+- macOS, Linux and WSL; native Windows is not supported (use WSL). Every relay, the queue and the
+  setup scripts refuse to run on native Windows (exit 2) and point to WSL.
+- Shell examples assume bash/zsh.
 
 ## Trust and validation
 
@@ -249,8 +250,8 @@ This package is intentionally inspectable:
   inlines only the code that relay uses, and CI fails if a shipped relay drifts from its source. The `switchboard-setup` utility ships `discover.mjs` / `config.mjs` / `lane.mjs`
   (and a shared implementer table) instead of a relay — it never dispatches coding work.
 - Those scripts make no network calls of their own, read or write no credentials, send no telemetry, and
-  have no dependencies (Node built-ins only). Relays launch an implementer CLI and `git`, plus the
-  platform process launcher/termination utility where a Windows shim or process-tree kill requires one.
+  have no dependencies (Node built-ins only). Relays launch an implementer CLI and `git`, never through a
+  shell.
   The `switchboard-queue` utility ships one `queue.mjs` (Node built-ins only, no network calls of its own):
   it runs the sibling relays and `git worktree` / `git branch`, and never commits or forces a removal.
   Discover may invoke installed CLIs for `--version` / model list probes (those CLIs may contact their
@@ -267,9 +268,8 @@ This package is intentionally inspectable:
 - Relays keep only absolute `PATH` entries, since an empty or relative entry would resolve inside the
   checkout. `switchboard-setup` discovery does the same.
 - After the implementer exits, a relay sends SIGKILL to everything left in the implementer's process
-  group (POSIX). A background process the brief started, such as a dev server or a watcher, does not
-  survive the run. A process that left the group (for example with `setsid`) is not covered. On
-  Windows, leftover processes keep running.
+  group. A background process the brief started, such as a dev server or a watcher, does not
+  survive the run. A process that left the group (for example with `setsid`) is not covered.
 - `switchboard-claude` does not load the repository's `.claude/settings.json` or
   `.claude/settings.local.json` (hooks included) by default: it passes `--setting-sources user`.
   `--project-settings` opts back in for a repository you trust, and `result.json` records it as
@@ -285,8 +285,8 @@ This package is intentionally inspectable:
 **Verification status** — claims here are backed by runs, not assumptions.
 
 > **Shared-engine rewrite.** Every relay now runs on the shared engine in `src/core/`. The contract
-> suite (checks against a fake implementer CLI) covers all 7 relays and runs on Linux and native
-> Windows CI. Entries marked "Switchboard live check" were recorded against the current relays with
+> suite (checks against a fake implementer CLI) covers all 7 relays and runs on Linux and macOS
+> CI. Entries marked "Switchboard live check" were recorded against the current relays with
 > `node tools/verify-live.mjs` (the JSON record is in `verification/`). The other live runs below
 > predate the rewrite; repeat them before relying on a specific claim.
 
@@ -302,23 +302,9 @@ Per skill — platform, CLI version, and what the run exercised:
   result file; deny rules and the shell sandbox blocking `git commit`, `git push`, `git -C <dir> push`,
   a nested `claude`, and a `$HOME` write.
   macOS, `claude` 2.1.271: `--autocompact` argument handling only. The installed CLI accepted `auto`, `400k`, `1M`, `200`, and `200000` and rejected `auto2`, `50k`, `2m`, `99`, `1000001`, and `0` with exit 1, each observed through `claude --autocompact <value> --help`, which validates the option and exits before any model call; `claude` 2.1.220 rejects the option itself with `unknown option '--autocompact'`, which is the documented 2.1.221 floor. The relay's pass-through, resume re-pass, and `result.json` record are contract-tested against the smoke matrix; no delegated run has been dispatched with `--autocompact` set.
-  Windows 11, native, `claude` 2.1.274 through the npm `claude.cmd` shim, launched from Windows
-  PowerShell 5.1 with an `--out-dir` containing a space: write run under `acceptEdits` editing one
-  file and creating another, with `git status` run through the pre-approved PowerShell tool and a
-  `git commit` attempt denied by the relay's deny rule (`permission_denied` with
-  `decision_reason_type: "rule"` in the event stream, `HEAD` untouched); `--session` resume whose
-  delta brief referred only to "the notes file you created a moment ago" and was applied correctly;
-  `--read-only` plan-mode run ordered to write two files over an already-dirty tree, which wrote
-  nothing and reported `readOnlyViolation: false` with the dirty files byte-identical; a 45s
-  `--timeout` firing on a run blocked in a foreground `ping` grandchild, reporting `timeout` and
-  exit 1 with no `ping`, `cmd`, or `claude` process left behind; `claude_unavailable`/127 writing a
-  result file, and usage errors exiting 2 without one. The runs used `--model haiku`. Not run on
-  Windows: a directly spawned `claude.exe`, the abort path, and a read-only violation. Claude's shell
-  sandbox is unsupported there, so the write profile's PowerShell is not isolated.
-- `switchboard-cursor` — Windows, `cursor-agent` 2026.07.23-e383d2b: write run under `--force`; plan-mode
-  `--read-only` touching nothing; `--session <id>` resume applying a delta brief; usage errors exiting
-  2. A maintainer-run native macOS plan-mode smoke against the same version captured model, session,
-  and usage with no touched files. `--stall-timeout` is contract-tested; the live hang it targets was
+- `switchboard-cursor` — macOS, `cursor-agent` 2026.07.23-e383d2b: a maintainer-run plan-mode smoke
+  captured model, session, and usage with no touched files. Write, `--session` resume, and
+  `--read-only` runs are contract-tested. `--stall-timeout` is contract-tested; the live hang it targets was
   observed on Linux with `cursor-agent` 2026.10.01-e373342 (two runs silent after `thinking`
   `completed`, never exiting).
 - `switchboard-pi` — macOS: stdin brief delivery, explicit provider and model selection, JSON
@@ -328,8 +314,7 @@ Per skill — platform, CLI version, and what the run exercised:
   argv (`--yolo`, `--tools read,grep,glob`, `--no-extensions --no-skills --no-rules`, `--thinking`),
   session header / `message_end` parsing, `--approve` omitting the project-trust flags, `--continue`
   resume, assistant `stopReason: error` reported as failed, `omp_unavailable`/127, and bounded
-  `--version` preflight. Native Windows launch is a native `omp.exe` (no `shell:true`); that path is
-  contract-tested via the smoke matrix's compiled fake, not against a live Oh My Pi install.
+  `--version` preflight.
 - `switchboard-warp` — macOS, `oz` 0.2026.05.27.15.44.stable_01: **live edit run verified**. A relay
   dispatch against a throwaway git repository had Warp add a function plus four assertions across
   two files; both project gates were re-run independently by the orchestrator, the diff matched the
@@ -352,34 +337,19 @@ Per skill — platform, CLI version, and what the run exercised:
   picked a moment ago" — and it answered correctly, confirming the resumed turn saw prior context, not
   just that the id was accepted. Contract-tested: argument validation,
   bounded version preflight, missing binary, result parsing, and whole-process-tree timeout/abort
-  cleanup. Windows 11, `codex` codex-cli 0.153.4, native (Git Bash launch, no `pwsh` installed):
-  a `workspace-write` dispatch against a throwaway repo created the briefed file and reported it
-  in `touchedFiles` with `status: "completed"`, exit 0, and a `threadId`; the brief had Codex run
-  shell commands and report its shell, which came back as System32 `powershell.exe` 5.1 with zero
-  `WindowsApps` entries on its `PATH` while the parent process carried one — the relay's PATH
-  filter reaching the sandbox, not just the child's argv. The denial the filter exists for was
-  reproduced through the unpatched relay on the same machine: a `workspace-write` dispatch asked
-  Codex to run `winget`, which lives only under `WindowsApps`, and both the PATH lookup and the
-  absolute path failed inside the sandbox with "The file cannot be accessed by the system" while
-  the same binary ran normally outside it. No Store `pwsh` is installed here, so the shell-launch
-  form of that denial (`0xC0070005` on every command) rests on a user report, not a run here. No Linux
-  run is recorded.
+  cleanup. No Linux run is recorded.
 - `switchboard-opencode` — contract-tested only: argument validation, bounded version
   preflight, missing binary, result parsing, and whole-process-tree timeout/abort cleanup. No
   end-to-end run is recorded here.
 - `switchboard-setup` — contract-tested: discover JSON shape, config validate/write/load, whole-lane
   project overlay, global write without creating `.switchboard/`, and `--lane` resolve / wrong-skill /
   flag-override against relays. The smoke suite runs live discovery against installed CLIs
-  (versions vary by machine). Native Windows discover smoke not yet claimed.
+  (versions vary by machine).
 - `switchboard-queue` — contract-tested with fake implementer CLIs (`node --test test/queue.test.mjs`): usage
   errors, parallel worktrees, fallback only before dispatch, lanes, abort on SIGTERM, the concurrency cap,
-  and cleanup. No live implementer run and no native Windows run claimed.
+  and cleanup. No live implementer run claimed.
 
-Not yet verified: native Windows launches for a directly spawned `claude.exe` (the npm `claude.cmd`
-shim path has a run above), exact-head `pi` and `omp` (`codex` and `opencode` have contract-tested
-`.cmd` shim handling; Cursor serializes a pre-joined, quoted command; `omp` and `oz` target their
-native binaries). Claude's own shell sandbox is unsupported on native Windows regardless of launch
-mechanics. A native Linux `cursor-agent` run is unverified. The full delegate →
+Not yet verified: exact-head `pi` and `omp`, and a live `cursor-agent` write run on macOS or Linux. The full delegate →
 review → commit loop is designed for and run on Claude Code; other orchestrators (Cursor, …) are
 designed-for but unproven.
 

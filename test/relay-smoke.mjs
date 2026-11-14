@@ -7,15 +7,9 @@
  * not complete:
  *
  *   1. timeout  — the watchdog kills the implementer's WHOLE process tree and
- *                 result.json reports status "timeout". Driven for the timeout
- *                 matrix on both platforms. On Windows, claude and cursor
- *                 launch a .cmd shim through a serialized cmd.exe invocation,
- *                 while codex/opencode/pi use shell:true. These are exactly the
- *                 cases a plain child.kill would miss; oz and omp spawn a
- *                 native binary directly — a .cmd stand-in cannot represent them,
- *                 so the smoke compiles a real fake .exe with the C# compiler
- *                 that ships in-box with Windows (no install, no network) and
- *                 puts it on PATH under their names. A POSIX variant repeats
+ *                 result.json reports status "timeout". Driven for every
+ *                 relay; the fake's grandchild is exactly the case a plain
+ *                 child.kill would miss. A variant repeats
  *                 each run with a parent that complies with
  *                 SIGTERM while its grandchild ignores it — the sweep at close
  *                 must fell the survivor even though the parent's exit
@@ -23,9 +17,7 @@
  *   2. aborted  — killing the relay itself still produces result.json with
  *                 status "aborted", and files the implementer flushes during
  *                 the shutdown grace window appear in the refreshed
- *                 touchedFiles. Driven for every relay on POSIX; Windows
- *                 delivers no catchable SIGTERM, so the scenario cannot be
- *                 driven there (the skill docs carry the same caveat).
+ *                 touchedFiles. Driven for every relay.
  *
  * Every fake answers each relay's version preflight (--version, `version`,
  * `changelog`), and can be told to hang or fail that probe by mode name, so a

@@ -113,18 +113,14 @@ A pre-run usage error exits 2 and writes no result. A missing `omp` exits 127 an
   probe failed or hung, so omp was never dispatched. Check the install (`omp --version` yourself).
 - **`status: "aborted"`:** the relay itself was killed (its parent's timeout, a stopped task, a
   closed terminal) and forwarded the kill to omp. The result is written before the relay exits;
-  inspect the working tree before re-dispatching. On native Windows a hard kill of the relay is
-  uncatchable (Node supports no `SIGTERM` handler there), so this status may never get written -
-  a relay process that is gone without a `result.json` is an aborted run; inspect the working
-  tree and `events.jsonl` directly.
+  inspect the working tree before re-dispatching.
 - **`status: "failed"` with `signal: "SIGKILL"`:** the host killed the process, commonly through
   the OOM killer or a supervisor timeout. This is not an omp error; check host memory and
   re-dispatch, or split the task into smaller briefs.
 - **`status: "timeout"`:** the `--timeout` watchdog killed the run; `error` reads
   `omp did not finish within --timeout <dur>; killed by the relay watchdog`. Increase `--timeout`
-  or split the task. On POSIX the relay sends SIGTERM to the process group, waits 10 seconds,
-  then sends SIGKILL if needed; on Windows there is no escalation phase — the whole process tree
-  is felled immediately with `taskkill /pid <pid> /t /f`.
+  or split the task. The relay sends SIGTERM to the process group, waits 10 seconds,
+  then sends SIGKILL if needed.
 - **Empty `finalMessage`:** inspect `touchedFiles` and the diff. Add a
   `<structured_output_contract>` to the next brief to require a closing report.
 
@@ -157,9 +153,9 @@ so a hung or crashing CLI fails fast and explicitly instead of hanging the run.
 
 Around the run, the relay keeps only absolute `PATH` entries (an empty or relative entry would
 resolve inside the checkout). After the implementer exits it sends SIGKILL to everything left in the
-implementer's process group (POSIX), so a background process the brief started, such as a dev server
+implementer's process group, so a background process the brief started, such as a dev server
 or a watcher, does not survive the run. A process that left the group (for example with `setsid`) is
-not covered, and on Windows leftovers keep running.
+not covered.
 
 ## The commit boundary
 

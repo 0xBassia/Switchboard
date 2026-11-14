@@ -45,7 +45,7 @@ Options:
 | `--read-only` | Shortcut for `--sandbox read-only` — review/diagnosis with no edits. |
 | `--resume-last` | Continue the most recent Codex session; send only the delta brief (see review-and-land). "Most recent" is global, so an unrelated Codex run can steal it — prefer `--session`. |
 | `--session <id>` | Continue one specific thread by id (the `threadId` from a prior `result.json`); send only the delta brief. Mutually exclusive with `--resume-last`; an empty id is rejected. |
-| `--clean-env` | Pass only runtime basics (`PATH`, home, locale, temp, `CODEX_HOME`, and Windows equivalents) to Codex and its version preflight. This changes inherited variables only; it does not protect files or other same-user secrets. |
+| `--clean-env` | Pass only runtime basics (`PATH`, home, user, shell, locale, terminal, temp, and `CODEX_HOME`) to Codex and its version preflight. This changes inherited variables only; it does not protect files or other same-user secrets. |
 | `--keep-env <name>` | Keep one additional variable under `--clean-env`; repeat for each required environment-backed auth, custom-provider credential, proxy, certificate, or MCP variable. The name must be set and use portable environment-variable syntax. |
 | `--skip-git-repo-check` | Allow running outside a git repo. |
 | `--timeout <dur>` | Relay-side watchdog (e.g. `30m`, `2h`); on expiry the child is killed and `result.json` gets `status: "timeout"`. Off by default. |
@@ -61,17 +61,6 @@ OS-backed auth and normal configuration still load, but direct environment-backe
 `OPENAI_API_KEY` can still matter as a custom-provider credential; provider, proxy, certificate, or
 MCP settings that reference any stripped variable likewise need it named with `--keep-env`. The same
 filtered environment is used for preflight and dispatch.
-
-On Windows, a sandboxed run (`read-only` or `workspace-write`) receives a `PATH` with every
-`WindowsApps` entry removed, again for both preflight and dispatch. The Microsoft Store installs
-apps — PowerShell 7 included — under a folder whose ACLs deny execution to the restricted token
-Codex's sandbox runs commands with. Codex prefers a `pwsh` found on `PATH`, so a Store-installed
-`pwsh` makes every sandboxed command fail with `0xC0070005` while the model keeps working blind:
-it cannot run a single gate and either gives up or reports work it never verified. Without those
-entries Codex falls back to System32 `powershell.exe`, which the sandbox can launch.
-`--sandbox danger-full-access` runs without the restricted token and gets `PATH` unchanged. To
-see whether a machine is affected: `(Get-Command pwsh -All).Source` — any result under a
-`WindowsApps` folder would hit this.
 
 ### Subagents
 
@@ -159,8 +148,7 @@ The relay blocks until Codex finishes. Back it with whatever your orchestrator o
 - **Claude Code:** run the `Bash` call with `run_in_background: true`; you're notified on completion,
   then read `result.json`.
 - **Plain shell / other agents:** foreground for short tasks, or background and poll —
-`node relay.mjs … &` in bash/zsh (including Git Bash/WSL), or your shell's equivalent (`Start-Job` in PowerShell,
-  `start /b` in cmd). A run is done when `result.json` exists with a `status`. **But** a pre-run usage
+  `node relay.mjs … &` in bash/zsh, or your shell's equivalent. A run is done when `result.json` exists with a `status`. **But** a pre-run usage
   error (bad args, empty brief) exits with code 2 *before* writing any file — so check the exit code
   too, don't only watch for the file. (A missing `codex` binary exits 127 but *does* write a
   `result.json` with status `codex_unavailable`.)
@@ -186,10 +174,7 @@ process has exited and `result.json` is written — not when a status line says 
   or a resume.
 - **`status: aborted`:** the relay itself was killed (its parent's timeout, a stopped task, a
   closed terminal) and forwarded the kill to codex. The result is written before the relay exits;
-  inspect the working tree before re-dispatching. On native Windows a hard kill of the relay is
-  uncatchable (Node supports no `SIGTERM` handler there), so this status may never get written -
-  a relay process that is gone without a `result.json` is an aborted run; inspect the working
-  tree and `events.jsonl` directly.
+  inspect the working tree before re-dispatching.
 - **`status: failed` with `signal: "SIGKILL"`:** the host ended the child — commonly the OOM killer
   or a supervisor timeout, not an implementer error. Free up host memory or split the task into
   smaller briefs, then re-dispatch.
@@ -235,9 +220,9 @@ Two alternatives exist if you ever want them, but the relay is the recommended p
 
 Around the run, the relay keeps only absolute `PATH` entries (an empty or relative entry would
 resolve inside the checkout). After the implementer exits it sends SIGKILL to everything left in the
-implementer's process group (POSIX), so a background process the brief started, such as a dev server
+implementer's process group, so a background process the brief started, such as a dev server
 or a watcher, does not survive the run. A process that left the group (for example with `setsid`) is
-not covered, and on Windows leftovers keep running.
+not covered.
 
 ## The commit boundary
 

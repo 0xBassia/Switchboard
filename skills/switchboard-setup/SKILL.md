@@ -8,7 +8,7 @@ description: >-
   a fleet of lanes, or which implementer handles feature/tests/ui work — not for
   dispatching a coding task to an implementer.
 license: MIT
-compatibility: Requires Node 18+. No implementer CLIs are required — the skill discovers what is available.
+compatibility: Requires Node 18+. No implementer CLIs are required — the skill discovers what is available. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).
 metadata:
   version: 1.1.0
 ---
@@ -174,8 +174,8 @@ On explicit yes, write **only** the chosen scope (validate first). Build the pay
 scope’s raw file (or an empty `lanes` object if new) — not from the effective merged `load` view,
 or a project write will shadow global-only lanes and a global write will promote project-only ones.
 
-Create a uniquely named file under the platform temporary directory (`$TMPDIR`, `%TEMP%`, or Node
-`os.tmpdir()`; never hard-code `/tmp`, which breaks on native Windows), write the **exact approved
+Create a uniquely named file under the platform temporary directory (`$TMPDIR` or Node
+`os.tmpdir()`; never hard-code `/tmp`, since `$TMPDIR` may point elsewhere), write the **exact approved
 JSON** into it with the orchestrator's file-writing tool, and use that populated path as
 `<lanes-json>` below. Never validate an empty temp file. Remove the temp file after the
 validation/write attempt, whether it succeeds or fails.

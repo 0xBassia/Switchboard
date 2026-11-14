@@ -15,20 +15,14 @@
  * Node built-ins only. Probed CLIs may contact their own services.
  */
 
-import { execSync, execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { accessSync, constants as fsConstants, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, isAbsolute, join, resolve, sep } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { IMPLEMENTERS } from "./implementers.mjs";
 
-// Windows looks for a bare command (git, a CLI) in the current directory before PATH;
-// the checkout is untrusted, so never let it supply one.
-if (process.platform === "win32" && !process.env.NoDefaultCurrentDirectoryInExePath) process.env.NoDefaultCurrentDirectoryInExePath = "1";
 // An empty or relative PATH entry would resolve inside the checkout; keep absolute ones only.
-for (const key of Object.keys(process.env).filter((name) => name.toUpperCase() === "PATH")) {
-  process.env[key] = process.env[key].split(process.platform === "win32" ? ";" : ":")
-    .filter((entry) => isAbsolute(entry.replace(/^"(.*)"$/, "$1"))).join(process.platform === "win32" ? ";" : ":");
-}
+if (process.env.PATH !== undefined) process.env.PATH = process.env.PATH.split(":").filter((entry) => isAbsolute(entry)).join(":");
 
 const PROBE_TIMEOUT_MS = 10_000;
 
@@ -57,35 +51,10 @@ It counts session entries and reads their mtimes; it never opens a session file.
 `;
 
 function resolveBinary(binary) {
-  const pathValue = process.env.PATH ?? process.env.Path;
   // Only absolute PATH entries survive startup (see the top of this file), so an
   // empty PATH finds nothing, the same as the relays' own spawn.
-  if (!pathValue) return null;
-  const pathEntries = pathValue
-    .split(delimiter)
-    .map((entry) => entry.replace(/^"(.*)"$/, "$1"))
-    .filter((entry) => entry.length > 0);
-
-  if (process.platform === "win32") {
-    const pathExt = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
-      .split(";")
-      .map((ext) => ext.trim().toLowerCase())
-      .filter(Boolean);
-    for (const entry of pathEntries) {
-      const dir = resolve(entry);
-      for (const ext of pathExt) {
-        const candidate = join(dir, `${binary}${ext}`);
-        try {
-          if (statSync(candidate).isFile()) return candidate;
-        } catch {
-          // keep looking
-        }
-      }
-    }
-    return null;
-  }
-
-  for (const entry of pathEntries) {
+  if (!process.env.PATH) return null;
+  for (const entry of process.env.PATH.split(":").filter((dir) => dir.length > 0)) {
     const candidate = join(resolve(entry), binary);
     try {
       accessSync(candidate, fsConstants.X_OK);
@@ -97,12 +66,9 @@ function resolveBinary(binary) {
   return null;
 }
 
-/** Expand ~ and %VAR% in a registry `locate` candidate, then normalize separators. */
+/** Expand a leading ~ in a registry `locate` candidate. */
 function expandCandidate(raw) {
-  const expanded = raw
-    .replace(/^~(?=\/)/, homedir())
-    .replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (_, name) => process.env[name] || "");
-  return expanded.split("/").join(sep);
+  return raw.replace(/^~(?=\/)/, homedir());
 }
 
 /**
@@ -130,31 +96,12 @@ function resolveLaunch(impl) {
   return null;
 }
 
-function needsWindowsShell(impl, launch) {
-  // A node-launched bundle is a real executable and never needs the shell, even
-  // for an implementer whose PATH binary would.
-  if (launch.prefixArgs.length > 0) return false;
-  return process.platform === "win32" && (impl.winShell || /\.(?:cmd|bat)$/i.test(launch.command));
-}
-
-/** Quote a path for cmd.exe when shell:true; reject metacharacters. */
-function quoteForCmd(value) {
-  if (/[\r\n%!]/.test(value) || value.includes('"')) {
-    throw new Error(`unsafe path for Windows shell probe: ${value}`);
-  }
-  return `"${value}"`;
-}
-
-function runProbe(launch, args, useShell) {
-  const probeArgs = [...launch.prefixArgs, ...args];
-  const command = useShell ? [quoteForCmd(launch.command), ...probeArgs].join(" ") : launch.command;
-  const options = {
+function runProbe(launch, args) {
+  return execFileSync(launch.command, [...launch.prefixArgs, ...args], {
     encoding: "utf8",
     timeout: PROBE_TIMEOUT_MS,
     stdio: ["pipe", "pipe", "pipe"],
-    shell: useShell,
-  };
-  return useShell ? execSync(command, options) : execFileSync(command, probeArgs, options);
+  });
 }
 
 /** Probe output is colorized (opencode); patterns match the plain text. */
@@ -163,19 +110,13 @@ function stripAnsi(text) {
 }
 
 /** spawnSync, not runProbe: success-path stderr matters (codex prints login status there). */
-function captureProbe(launch, args, useShell) {
+function captureProbe(launch, args) {
   try {
-    const probeArgs = [...launch.prefixArgs, ...args];
-    const command = useShell ? [quoteForCmd(launch.command), ...probeArgs].join(" ") : launch.command;
-    const options = {
+    const result = spawnSync(launch.command, [...launch.prefixArgs, ...args], {
       encoding: "utf8",
       timeout: PROBE_TIMEOUT_MS,
       stdio: ["pipe", "pipe", "pipe"],
-      shell: useShell,
-    };
-    const result = useShell
-      ? spawnSync(command, options)
-      : spawnSync(command, probeArgs, options);
+    });
     const stdout = result.stdout || "";
     return {
       ok: !result.error && result.status === 0,
@@ -188,10 +129,9 @@ function captureProbe(launch, args, useShell) {
 }
 
 function probeVersion(impl, launch) {
-  const useShell = needsWindowsShell(impl, launch);
   const tryArgs = (versionArgs) => {
     try {
-      const raw = runProbe(launch, versionArgs, useShell);
+      const raw = runProbe(launch, versionArgs);
       const firstLine = raw.trim().split(/\r?\n/, 1)[0].trim();
       if (!firstLine) return null;
       if (impl.versionFormat !== "colon-prefix") return firstLine;
@@ -219,11 +159,10 @@ function readAuthField(raw, jsonField) {
 function probeAuth(impl, launch, captured = null) {
   if (!impl.authProbe) return null;
   const { args, jsonField, successPattern, failPattern, missMeansFalse } = impl.authProbe;
-  const useShell = needsWindowsShell(impl, launch);
 
   if (jsonField) {
     try {
-      return readAuthField(runProbe(launch, args, useShell), jsonField);
+      return readAuthField(runProbe(launch, args), jsonField);
     } catch (error) {
       const combined = `${error.stdout || ""}${error.stderr || ""}`;
       if (combined.trim()) {
@@ -234,7 +173,7 @@ function probeAuth(impl, launch, captured = null) {
     }
   }
 
-  const { ok, output } = captured || captureProbe(launch, args, useShell);
+  const { ok, output } = captured || captureProbe(launch, args);
   // failPattern first: "not logged in" also contains "logged in".
   if (failPattern && failPattern.test(output)) return false;
   if (successPattern) {
@@ -318,7 +257,7 @@ function probeModels(impl, launch, captured = null) {
     return captured.ok ? parseModelLines(captured.stdout, probe.format) : failedModels();
   }
   try {
-    const raw = runProbe(launch, probe.args, needsWindowsShell(impl, launch));
+    const raw = runProbe(launch, probe.args);
     return parseModelLines(raw, probe.format);
   } catch {
     return failedModels();
@@ -391,11 +330,20 @@ function probeUsage(impl) {
   return { sessions, lastUsed: lastUsed > 0 ? new Date(lastUsed).toISOString() : null };
 }
 
+// Switchboard runs on macOS, Linux and WSL; native Windows is refused (exit 2) before
+// anything is read or written. --help still answers.
+function refuseNativeWindows() {
+  if (process.platform !== "win32") return;
+  process.stderr.write("switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
+  process.exit(2);
+}
+
 function main(argv) {
   if (argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(HELP);
     process.exit(0);
   }
+  refuseNativeWindows();
   const withUsage = argv.includes("--usage");
   if (argv.some((arg) => arg !== "--usage")) {
     process.stderr.write("discover.mjs: unexpected arguments. Use --help.\n");
@@ -419,7 +367,7 @@ function main(argv) {
       modelArgs &&
       authArgs.length === modelArgs.length &&
       authArgs.every((arg, index) => arg === modelArgs[index])
-        ? captureProbe(launch, authArgs, needsWindowsShell(impl, launch))
+        ? captureProbe(launch, authArgs)
         : null;
     const entry = {
       key: impl.key,

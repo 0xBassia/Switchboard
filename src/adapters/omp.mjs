@@ -9,10 +9,9 @@
  *
  * Trust posture: relay.mjs itself makes no network calls, reads or writes no
  * credentials, and sends no telemetry; it has no dependencies (Node built-ins
- * only). It shells out only to `omp` and `git`, plus the platform
- * process-termination utility when a Windows process-tree kill requires one.
- * The `omp` process it launches does authenticate — exactly as you do at the
- * terminal. Read this file before you run it.
+ * only). It shells out only to `omp` and `git`. The `omp` process it launches
+ * does authenticate — exactly as you do at the terminal. Read this file before
+ * you run it.
  *
  * The brief is piped to omp on stdin, so it never appears in the host process
  * list and no argv size cap applies. Keep secrets out of the brief anyway on
@@ -29,8 +28,8 @@
  * --no-rules` unless `--approve` explicitly trusts project `.omp` resources.
  * The diff reported in `touchedFiles` is the record of what changed.
  *
- * omp is a native binary (bun / install script / Homebrew), including on
- * Windows, so this relay never launches it through a shell. Only
+ * omp is a native binary (bun / install script / Homebrew), and this relay
+ * never launches it through a shell. Only
  * token-validated flag values ride argv (the brief never does).
  *
  * Usage:
@@ -133,7 +132,7 @@ const omp = {
     usage: state.usage,
     stopReason: state.stopReason,
   }),
-  // omp is a native binary on every platform, including Windows: never a shell.
+  // omp is a native binary: never a shell.
   version: () => ({ launch: { command: "omp", args: ["--version"] } }),
   unavailableHint: "Install with `bun install -g @oh-my-pi/pi-coding-agent`, then authenticate (`/login`, or an API-key environment variable).",
   launch(opts, brief) {

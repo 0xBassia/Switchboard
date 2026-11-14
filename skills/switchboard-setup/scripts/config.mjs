@@ -38,13 +38,15 @@ import {
   TIMEOUT_RE,
 } from "./implementers.mjs";
 
-// Windows looks for a bare command (git, a CLI) in the current directory before PATH;
-// the checkout is untrusted, so never let it supply one.
-if (process.platform === "win32" && !process.env.NoDefaultCurrentDirectoryInExePath) process.env.NoDefaultCurrentDirectoryInExePath = "1";
 // An empty or relative PATH entry would resolve inside the checkout; keep absolute ones only.
-for (const key of Object.keys(process.env).filter((name) => name.toUpperCase() === "PATH")) {
-  process.env[key] = process.env[key].split(process.platform === "win32" ? ";" : ":")
-    .filter((entry) => isAbsolute(entry.replace(/^"(.*)"$/, "$1"))).join(process.platform === "win32" ? ";" : ":");
+if (process.env.PATH !== undefined) process.env.PATH = process.env.PATH.split(":").filter((entry) => isAbsolute(entry)).join(":");
+
+// Switchboard runs on macOS, Linux and WSL; native Windows is refused (exit 2) before
+// anything is read or written. --help still answers.
+function refuseNativeWindows() {
+  if (process.platform !== "win32") return;
+  process.stderr.write("switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
+  process.exit(2);
 }
 
 /** Same ceiling relays use for --timeout (Node setTimeout max ~24.8 days). */
@@ -66,7 +68,7 @@ load prints the effective lane map (project whole-lane replaces global) as JSON.
 `;
 
 export function globalConfigPath() {
-  // Prefer XDG when set; otherwise ~/.config (homedir() → HOME / USERPROFILE).
+  // Prefer XDG when set; otherwise ~/.config (homedir() → HOME).
   const base = process.env.XDG_CONFIG_HOME
     ? process.env.XDG_CONFIG_HOME
     : join(homedir(), ".config");
@@ -240,7 +242,7 @@ function validateDialValue(implementer, field, value, laneName, label) {
     return null;
   }
   if (field === "variant") {
-    // The variant may reach a win32 shell:true launch (opencode 1.x --variant); reject cmd metacharacters.
+    // The variant rides argv (opencode 1.x --variant): plain tokens only, as the relay checks.
     if (!MODEL_TOKEN.shellSafe.test(value)) {
       return `${label}: lane ${laneName}.variant has unsupported characters (allowed: letters, digits, . _ : / -)`;
     }
@@ -269,9 +271,7 @@ function validateModelOrProvider(implementer, field, value, laneName, label) {
   } else if (
     implementer === "pi" ||
     implementer === "omp" ||
-    // codex (and any other win32 shell:true relay) must not accept cmd metacharacters in -m.
-    implementer === "codex" ||
-    IMPLEMENTER_BY_KEY[implementer]?.winShell
+    implementer === "codex"
   ) {
     pattern = MODEL_TOKEN.shellSafe;
     hint = "letters, digits, . _ : / -";
@@ -330,7 +330,7 @@ export function readConfigFile(path, { untrusted = false, root = null } = {}) {
   return { path, document: parsed.document, digest: configDigest(raw) };
 }
 
-// Line endings are normalized first: Git on Windows (core.autocrlf) checks the approved file out
+// Line endings are normalized first: Git with core.autocrlf can check the approved file out
 // with CRLF in a clone or linked worktree, which is the same content the user approved.
 function configDigest(raw) {
   return createHash("sha256").update(Buffer.from(raw).toString("utf8").replace(/\r\n/g, "\n")).digest("hex");
@@ -404,7 +404,7 @@ export function writeAtomic(targetPath, document) {
   const parsed = parseConfigDocument(JSON.stringify(document), "write payload");
   if (!parsed.ok) throw new Error(parsed.error);
   mkdirSync(dirname(targetPath), { recursive: true });
-  // Temp file must live beside the target: renameSync across drives fails on Windows (EXDEV).
+  // Temp file must live beside the target: renameSync across filesystems fails (EXDEV).
   const tmp = join(
     dirname(targetPath),
     `.config.${process.pid}.${Date.now()}.tmp`,
@@ -430,6 +430,7 @@ function main(argv) {
       process.stdout.write(HELP);
       process.exit(argv.length === 0 ? 2 : 0);
     }
+    refuseNativeWindows();
 
     const cmd = argv[0];
     let cwd = process.cwd();

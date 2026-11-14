@@ -86,8 +86,8 @@ platforms the normal relay profile auto-approves commands that stay inside Claud
 requests failure when that sandbox is unavailable. A gate that needs network access, host services,
 or writes outside the working tree may fail under that profile; state the need in the brief and decide
 whether a different isolated environment is appropriate instead of silently weakening the boundary.
-Merged user or managed settings can affect the effective sandbox. Native Windows pre-approves
-PowerShell without that sandbox; see [dispatch-and-poll.md](dispatch-and-poll.md).
+Merged user or managed settings can affect the effective sandbox; see
+[dispatch-and-poll.md](dispatch-and-poll.md).
 
 ## One task per brief
 

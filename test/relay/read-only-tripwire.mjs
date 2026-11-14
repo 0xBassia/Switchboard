@@ -126,7 +126,7 @@ async function runScenario(h, skill, scenario) {
 }
 
 export async function runReadOnlyTripwire(h) {
-  let invalidUtf8Filenames = !h.WIN;
+  let invalidUtf8Filenames = true;
   if (invalidUtf8Filenames) {
     const probeDir = join(h.scratch, "invalid-utf8-probe");
     mkdirSync(probeDir);
@@ -147,7 +147,7 @@ export async function runReadOnlyTripwire(h) {
     { name: "clean", expected: false },
     { name: "unknown", repo: false, expected: null },
     { name: "already-dirty", dirty: true, expected: true },
-    ...(!h.WIN ? [{ name: "trailing-space-root", trailingSpaceRoot: true, dirty: true, expected: true }] : []),
+    { name: "trailing-space-root", trailingSpaceRoot: true, dirty: true, expected: true },
     { name: "index-only-already-dirty", indexOnly: true, expected: true },
     { name: "proof-over-unknown", dirty: true, unknown: true, expected: true },
     ...(invalidUtf8Filenames ? [{ name: "invalid-utf8-filename", invalidUtf8: true, expected: null }] : []),
@@ -164,19 +164,14 @@ export async function runReadOnlyTripwire(h) {
     { name: "preexisting-artifact-rename", artifactsInside: true, preexistingArtifactRename: true, expected: false },
     { name: "artifact-endpoint-rename", artifactsInside: true, artifactEndpointRename: true, expected: true, exit: 1 },
     { name: "relay-artifacts-plus-write", artifactsInside: true, dirty: true, expected: true },
-    ...(!h.WIN ? [{ name: "raw-symlink-target-write", rawSymlinkTarget: true, expected: true }] : []),
-    ...(!h.WIN ? [{ name: "artifact-symlink-target-write", artifactsInside: true, artifactSymlink: true, expected: false }] : []),
+    { name: "raw-symlink-target-write", rawSymlinkTarget: true, expected: true },
+    { name: "artifact-symlink-target-write", artifactsInside: true, artifactSymlink: true, expected: false },
   ];
   const tripwireSkills = ["claude"];
   for (const skill of tripwireSkills) {
     for (const scenario of scenarios) await runScenario(h, skill, scenario);
   }
 
-  if (h.WIN) {
-    console.log("  skip  claude abort/result artifacts: Windows delivers no catchable SIGTERM");
-    console.log("  skip  claude spawn error: shell:true reports a shell exit, not a spawn error, on Windows");
-    return;
-  }
   {
     const workDir = h.freshRepo("work-claude-abort-artifacts");
     const pidFile = join(h.scratch, "pid-claude-abort-artifacts");

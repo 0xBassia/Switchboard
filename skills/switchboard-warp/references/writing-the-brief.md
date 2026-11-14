@@ -18,7 +18,7 @@ Two consequences that do not apply to the other skills in this package:
   brief that inlines whole files can trip it. Reference paths rather than pasting file contents —
   Warp can read the workspace itself.
 
-Because the brief rides argv, the relay never launches `oz` through a shell on any platform.
+Because the brief rides argv, the relay never launches `oz` through a shell.
 
 ## The shape that works
 

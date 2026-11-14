@@ -211,7 +211,7 @@ export async function runOmp(h) {
         },
       },
     })}\n`);
-    const fleetEnv = { ...h.baseEnv, HOME: cfgHome, USERPROFILE: cfgHome };
+    const fleetEnv = { ...h.baseEnv, HOME: cfgHome };
     delete fleetEnv.XDG_CONFIG_HOME;
     const writeCfg = spawnSync(process.execPath, [join(setupDir, "config.mjs"), "write", "--scope", "global", laneFile], {
       encoding: "utf8",
@@ -299,32 +299,30 @@ export async function runOmp(h) {
       preflightResult.error?.includes("was not dispatched"));
   }
 
-  if (!h.WIN) {
-    const preflightOutDir = join(h.scratch, "out-abort-preflight-omp");
-    const preflight = h.runRelay("omp", workDir, preflightOutDir, ["--timeout", "1s"], {
-      SMOKE_MODE: "omp-version-hang",
+  const preflightOutDir = join(h.scratch, "out-abort-preflight-omp");
+  const preflight = h.runRelay("omp", workDir, preflightOutDir, ["--timeout", "1s"], {
+    SMOKE_MODE: "omp-version-hang",
+  });
+  h.check("omp preflight abort: run artifacts are prepared",
+    await h.until(() => existsSync(join(preflightOutDir, "events.jsonl")), 2000));
+  preflight.kill("SIGTERM");
+  const exited = await new Promise((resolveExit) => {
+    const timer = setTimeout(() => {
+      preflight.kill("SIGKILL");
+      resolveExit(false);
+    }, 5000);
+    preflight.on("close", () => {
+      clearTimeout(timer);
+      resolveExit(true);
     });
-    h.check("omp preflight abort: run artifacts are prepared",
-      await h.until(() => existsSync(join(preflightOutDir, "events.jsonl")), 2000));
-    preflight.kill("SIGTERM");
-    const exited = await new Promise((resolveExit) => {
-      const timer = setTimeout(() => {
-        preflight.kill("SIGKILL");
-        resolveExit(false);
-      }, 5000);
-      preflight.on("close", () => {
-        clearTimeout(timer);
-        resolveExit(true);
-      });
-    });
-    const value = existsSync(join(preflightOutDir, "result.json")) ? h.result(preflightOutDir) : {};
-    h.check("omp preflight abort: result is aborted and dispatch never starts",
-      exited &&
-      value.status === "aborted" &&
-      value.signal === "SIGTERM" &&
-      value.error?.includes("version preflight") &&
-      value.error?.includes("was not dispatched"));
-  }
+  });
+  const value = existsSync(join(preflightOutDir, "result.json")) ? h.result(preflightOutDir) : {};
+  h.check("omp preflight abort: result is aborted and dispatch never starts",
+    exited &&
+    value.status === "aborted" &&
+    value.signal === "SIGTERM" &&
+    value.error?.includes("version preflight") &&
+    value.error?.includes("was not dispatched"));
 
   for (const [label, env, expected] of [
     ["clean", {}, false],

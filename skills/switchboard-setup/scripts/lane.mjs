@@ -115,11 +115,20 @@ function parseResolveArgs(argv) {
   return { cwd, lane, implementer };
 }
 
+// Switchboard runs on macOS, Linux and WSL; native Windows is refused (exit 2) before
+// anything is read or written. --help still answers.
+function refuseNativeWindows() {
+  if (process.platform !== "win32") return;
+  process.stderr.write("switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
+  process.exit(2);
+}
+
 function main(argv) {
   if (argv.includes("--help") || argv.includes("-h") || argv.length === 0) {
     process.stdout.write(HELP);
     process.exit(argv.length === 0 ? 2 : 0);
   }
+  refuseNativeWindows();
   const cmd = argv[0];
   if (cmd !== "resolve") fail(`unknown command ${JSON.stringify(cmd)}`);
   try {

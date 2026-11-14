@@ -38,7 +38,7 @@ switchboard ok
 Do not modify, create, or delete any other file, and do not commit.
 Report what you created.`;
 
-const platformName = { darwin: "macOS", linux: "Linux", win32: "native Windows" }[platform()] || platform();
+const platformName = { darwin: "macOS", linux: "Linux" }[platform()] || platform();
 
 function fail(message) {
   process.stderr.write(`verify-live: ${message}\n`);

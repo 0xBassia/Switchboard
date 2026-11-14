@@ -10,10 +10,9 @@
  *
  * Trust posture: relay.mjs itself makes no network calls, reads or writes no
  * credentials, and sends no telemetry; it has no dependencies (Node built-ins
- * only). It shells out only to `oz` and `git`, plus the platform
- * process-termination utility when a Windows process-tree kill requires one.
- * The `oz` process it launches does authenticate — exactly as you do at the
- * terminal. Read this file before you run it.
+ * only). It shells out only to `oz` and `git`. The `oz` process it launches
+ * does authenticate — exactly as you do at the terminal. Read this file before
+ * you run it.
  *
  * Brief delivery: `oz agent run` requires one of --prompt/--saved-prompt/
  * --task-id/--skill, and its -f/--file config path does NOT satisfy that
@@ -23,7 +22,7 @@
  * OS argv limit. Keep secrets out of the brief — reference workspace files or
  * environment variables instead — and on a shared machine prefer a short brief
  * that points `oz` at files in the repo. Because the brief rides argv, this
- * relay never launches `oz` through a shell on any platform.
+ * relay never launches `oz` through a shell.
  *
  * Workspace snapshots: `oz agent run` uploads an end-of-run workspace snapshot
  * by default. The relay does not change that default — it is the CLI's own
@@ -120,8 +119,8 @@ function eventTexts(event) {
 }
 
 // The brief rides argv as the --prompt value: the OS caps one argv string (~128KB on Linux via
-// MAX_ARG_STRLEN; Windows caps the whole command line at 32K characters).
-const MAX_BRIEF_BYTES = (process.platform === "win32" ? 12 : 120) * 1024;
+// MAX_ARG_STRLEN).
+const MAX_BRIEF_BYTES = 120 * 1024;
 
 const warp = {
   key: "warp",

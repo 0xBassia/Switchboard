@@ -8,7 +8,7 @@ description: >-
   reviewer. DO NOT USE for tasks small enough to do inline, or when the user wants the code written
   directly without delegating.
 license: MIT
-compatibility: Requires the `pi` CLI installed and authenticated (`/login` inside pi, or a provider API key in the environment), Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Shell examples assume bash/zsh (macOS/Linux, or Git Bash/WSL on Windows).
+compatibility: Requires the `pi` CLI installed and authenticated (`/login` inside pi, or a provider API key in the environment), Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). Shell examples assume bash/zsh.
 metadata:
   version: 1.1.0
 ---
@@ -40,8 +40,7 @@ The loop needs only a shell command and file access, so any comparable orchestra
 
 Omit `--model` to use pi's configured default. To pick another, choose from `pi --list-models`
 and pass an explicit id or pattern like `<provider>/<model-id>` or `sonnet:high`. The relay
-accepts letters, digits, and `. _ : / -` only (the value reaches a shell on Windows), so glob
-patterns with `*` are not forwarded.
+accepts letters, digits, and `. _ : / -` only, so glob patterns with `*` are not forwarded.
 
 ## The loop
 

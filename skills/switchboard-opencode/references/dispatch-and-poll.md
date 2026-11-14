@@ -87,8 +87,7 @@ The relay blocks until OpenCode finishes. Back it with whatever your orchestrato
 - **Claude Code:** run the `Bash` call with `run_in_background: true`; you're notified on completion,
   then read `result.json`.
 - **Plain shell / other agents:** foreground for short tasks, or background and poll —
-`node relay.mjs … &` in bash/zsh (including Git Bash/WSL), or your shell's equivalent (`Start-Job` in PowerShell,
-  `start /b` in cmd). A run is done when `result.json` exists with a `status`. **But** a pre-run usage
+  `node relay.mjs … &` in bash/zsh, or your shell's equivalent. A run is done when `result.json` exists with a `status`. **But** a pre-run usage
   error (bad args, empty brief) exits with code 2 *before* writing any file — so check the exit code
   too, don't only watch for the file. (A missing `opencode` binary exits 127 but *does* write a
   `result.json` with status `opencode_unavailable`.)
@@ -113,10 +112,7 @@ process has exited and `result.json` is written — not when a status line says 
   or a resume.
 - **`status: aborted`:** the relay itself was killed (its parent's timeout, a stopped task, a
   closed terminal) and forwarded the kill to opencode. The result is written before the relay exits;
-  inspect the working tree before re-dispatching. On native Windows a hard kill of the relay is
-  uncatchable (Node supports no `SIGTERM` handler there), so this status may never get written -
-  a relay process that is gone without a `result.json` is an aborted run; inspect the working
-  tree and `events.jsonl` directly.
+  inspect the working tree before re-dispatching.
 - **`status: failed` with `signal: "SIGKILL"`:** the host ended the child — commonly the OOM killer
   or a supervisor timeout, not an implementer error. Free up host memory or split the task into
   smaller briefs, then re-dispatch.
@@ -160,9 +156,9 @@ If you ever want it, raw `opencode run` is fine for one-offs — you just give u
 
 Around the run, the relay keeps only absolute `PATH` entries (an empty or relative entry would
 resolve inside the checkout). After the implementer exits it sends SIGKILL to everything left in the
-implementer's process group (POSIX), so a background process the brief started, such as a dev server
+implementer's process group, so a background process the brief started, such as a dev server
 or a watcher, does not survive the run. A process that left the group (for example with `setsid`) is
-not covered, and on Windows leftovers keep running.
+not covered.
 
 ## The commit boundary
 

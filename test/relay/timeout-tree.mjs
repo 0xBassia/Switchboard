@@ -47,11 +47,8 @@ for (const tc of TIMEOUT_CASES) {
 
 // A compliant parent must not shield a defiant descendant: the parent exits on the group
 // SIGTERM, its grandchild ignores it, and the sweep at close must still fell the grandchild
-// before the relay reports. POSIX only — the Windows kill is a single unconditional
-// taskkill /t /f with no SIGTERM/escalation phase to defeat.
-if (!h.WIN) {
-  for (const tc of TIMEOUT_CASES) {
-    await driveTimeout(tc, "timeout-yield", { SMOKE_GRAND_IGNORES_SIGTERM: "1" }, "timeout-yield");
-  }
+// before the relay reports.
+for (const tc of TIMEOUT_CASES) {
+  await driveTimeout(tc, "timeout-yield", { SMOKE_GRAND_IGNORES_SIGTERM: "1" }, "timeout-yield");
 }
 }

@@ -7,10 +7,9 @@
  *
  * Trust posture: this relay makes no network calls of its own, reads or writes
  * no credentials, sends no telemetry, and has no dependencies (Node built-ins
- * only). It launches `claude` and uses `git status --porcelain`; on Windows it
- * may also use cmd.exe for an npm .cmd shim and taskkill to terminate a process
- * tree. Claude authenticates and makes its own network calls exactly as it does
- * at the terminal.
+ * only). It launches `claude` and uses `git status --porcelain`. Claude
+ * authenticates and makes its own network calls exactly as it does at the
+ * terminal.
  *
  * The relay never commits. Its write-capable profiles use string rules to deny
  * common direct forms of `git commit`, `git push`, and nested `claude`, plus
@@ -20,14 +19,13 @@
  * lands the work.
  *
  * Normal runs use Claude's `acceptEdits` permission mode with an explicit tool
- * surface (Read, Glob, Grep, Edit, Write, and the platform shell). On macOS,
- * Linux, and WSL2, an inline settings file requires Claude's shell sandbox,
- * disables its unsandboxed escape hatch, and auto-approves commands that stay
+ * surface (Read, Glob, Grep, Edit, Write, and Bash). An inline settings file
+ * requires Claude's shell sandbox (macOS, Linux, WSL2), disables its
+ * unsandboxed escape hatch, and auto-approves commands that stay
  * sandboxed so non-interactive gates can run. That sandbox covers shell
  * processes and their children only; merged local or managed settings can
  * affect its effective boundary, and it is not a universal boundary around
- * Claude Code. Native Windows has no Claude shell sandbox, so the relay
- * pre-approves PowerShell there and documents that it is not OS-isolated.
+ * Claude Code.
  *
  * `--read-only` uses plan mode and exposes only Read, Glob, and Grep: no edit,
  * write, shell, MCP, skill, command, or Agent tool. The relay also compares git
@@ -91,15 +89,10 @@
  * a forced non-zero code for timeout or a terminal error result. Once the brief
  * and artifact directory validate, result.json is written for completed,
  * failed, timeout, aborted, and claude_unavailable outcomes.
- *
- * Native Windows launch behavior supports a directly spawned claude.exe and an
- * npm claude.cmd shim through cmd.exe with strictly serialized arguments. The
- * claude.cmd path has a recorded native-Windows run; a directly spawned
- * claude.exe remains pending native-Windows verification.
  */
 
 import { accessSync, constants as fsConstants, statSync } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { exclusive, fail } from "../core/cli.mjs";
 import { runRelay } from "../core/relay.mjs";
 import { writeJsonAtomic } from "../core/run.mjs";
@@ -111,86 +104,29 @@ const MAX_BRIEF_BYTES = 10_000_000;
 const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max", "ultracode"];
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:@\/\[\]-]*$/;
 const SAFE_SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
-const IS_WINDOWS = process.platform === "win32";
-
 // Nested under Claude Code, only CLAUDECODE is removed; credentials and
-// CLAUDE_CODE_CHILD_SESSION are preserved. Windows env keys are case-insensitive.
+// CLAUDE_CODE_CHILD_SESSION are preserved.
 function childEnvironment() {
   const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (IS_WINDOWS ? key.toUpperCase() === "CLAUDECODE" : key === "CLAUDECODE") delete env[key];
-  }
+  delete env.CLAUDECODE;
   return env;
 }
 
-function environmentValue(env, name) {
-  if (Object.prototype.hasOwnProperty.call(env, name)) return env[name];
-  if (!IS_WINDOWS) return undefined;
-  const key = Object.keys(env).find((candidate) => candidate.toUpperCase() === name);
-  return key ? env[key] : undefined;
-}
-
-// Resolves `claude` on PATH. On Windows a .cmd/.bat npm shim must go through
-// cmd.exe; a native claude.exe is spawned directly.
-function resolveClaudeLauncher(env, cwd) {
-  const pathValue = environmentValue(env, "PATH");
-  if (!pathValue) return null;
+// Resolves `claude` on PATH to an executable file, spawned directly.
+function resolveClaudeLauncher(env) {
+  if (!env.PATH) return null;
   // Absolute entries only: an empty or relative entry would resolve inside the untrusted --cd.
-  const pathEntries = pathValue.split(delimiter).map((entry) => entry.replace(/^"(.*)"$/, "$1")).filter((entry) => entry && isAbsolute(entry));
-  if (IS_WINDOWS) {
-    const pathExt = (environmentValue(env, "PATHEXT") || ".COM;.EXE;.BAT;.CMD")
-      .split(";").map((value) => value.trim().toLowerCase()).filter(Boolean);
-    for (const entry of pathEntries) {
-      const directory = entry;
-      for (const extension of pathExt) {
-        const candidate = join(directory, `claude${extension}`);
-        try {
-          if (!statSync(candidate).isFile()) continue;
-          return { path: candidate, kind: extension === ".cmd" || extension === ".bat" ? "cmd" : "direct" };
-        } catch {
-          // Keep searching PATH.
-        }
-      }
-    }
-    return null;
-  }
-  for (const entry of pathEntries) {
+  for (const entry of env.PATH.split(":").filter((dir) => isAbsolute(dir))) {
     const candidate = join(entry, "claude");
     try {
       accessSync(candidate, fsConstants.X_OK);
-      if (statSync(candidate).isFile()) return { path: candidate, kind: "direct" };
+      if (statSync(candidate).isFile()) return candidate;
     } catch {
       // Keep searching PATH.
     }
   }
   return null;
 }
-
-function quoteCmdArgument(value) {
-  // cmd expands %VAR% even inside quotes, and embedded quotes/newlines can break
-  // the /c command boundary. Reject those rare path characters instead of
-  // pretending an npm .cmd launch is safe. All user-selectable token values are
-  // independently restricted by the flag patterns.
-  if (/[\0\r\n"%!]/.test(value)) {
-    throw new Error("the npm claude.cmd launch cannot safely serialize an argument containing %, !, a quote, or a newline; use the native claude.exe or a safe artifact path");
-  }
-  return `"${value}"`;
-}
-
-function launchSpec(launcher, args, env) {
-  if (launcher.kind === "direct") return { command: launcher.path, args, env };
-  const commandLine = [launcher.path, ...args].map(quoteCmdArgument).join(" ");
-  return {
-    command: environmentValue(env, "COMSPEC") || "cmd.exe",
-    args: ["/d", "/v:off", "/s", "/c", `"${commandLine}"`],
-    env,
-    // The last argument is an intentionally serialized cmd /c program; letting
-    // libuv quote it again would change cmd's nested-quote boundary.
-    verbatim: true,
-  };
-}
-
-const shellTool = () => (IS_WINDOWS ? "PowerShell" : "Bash");
 
 function permissionMode(opts) {
   if (opts.readOnly) return "plan";
@@ -199,15 +135,13 @@ function permissionMode(opts) {
 }
 
 function toolSurface(opts) {
-  return opts.readOnly ? "Read,Glob,Grep" : `Read,Glob,Grep,Edit,Write,${shellTool()}`;
+  return opts.readOnly ? "Read,Glob,Grep" : "Read,Glob,Grep,Edit,Write,Bash";
 }
 
 function profileSettings(opts) {
-  const shell = shellTool();
-  const shellSandboxEnabled = !opts.readOnly && !IS_WINDOWS;
+  const shell = "Bash";
   return {
     disableClaudeAiConnectors: true,
-    ...(IS_WINDOWS ? { env: { CLAUDE_CODE_USE_POWERSHELL_TOOL: "1" } } : {}),
     permissions: {
       deny: opts.readOnly
         ? []
@@ -228,7 +162,7 @@ function profileSettings(opts) {
             `${shell}(*switchboard-claude*)`,
           ],
     },
-    ...(shellSandboxEnabled
+    ...(!opts.readOnly
       ? {
           sandbox: {
             enabled: true,
@@ -263,11 +197,8 @@ function claudeArgs(opts, run) {
   } else if (opts.dangerouslySkipPermissions) {
     args.push("--dangerously-skip-permissions");
   } else {
+    // Only commands that remain inside Claude's sandbox are auto-approved.
     args.push("--permission-mode", "acceptEdits");
-    // Supported platforms auto-approve only commands that remain inside
-    // Claude's sandbox. Native Windows has no shell sandbox, so approving its
-    // selected shell is the explicit tradeoff that keeps print mode headless.
-    if (IS_WINDOWS) args.push("--allowedTools", "PowerShell");
   }
   // The permission profile is passed on every invocation, including
   // --continue/--resume, rather than assuming a session remembers it.
@@ -354,7 +285,7 @@ const claude = {
     resumeLast: opts.resumeLast,
     permissionMode: state.permissionMode,
     toolSurface: toolSurface(opts).split(","),
-    shellSandbox: opts.readOnly ? "not-applicable" : IS_WINDOWS ? "unsupported-on-native-windows" : "strict",
+    shellSandbox: opts.readOnly ? "not-applicable" : "strict",
     dangerouslySkipPermissions: opts.dangerouslySkipPermissions,
     resultSubtype: state.resultSubtype,
     numTurns: state.numTurns,
@@ -363,9 +294,9 @@ const claude = {
   }),
   version(opts) {
     // The run's opts carry no state yet, so resolve here and stash on opts.
-    opts.launcher = resolveClaudeLauncher(childEnvironment(), opts.cd);
+    opts.launcher = resolveClaudeLauncher(childEnvironment());
     if (!opts.launcher) return { unavailable: true };
-    return { launch: launchSpec(opts.launcher, ["--version"], childEnvironment()), timeoutMs: 15_000 };
+    return { launch: { command: opts.launcher, args: ["--version"], env: childEnvironment() }, timeoutMs: 15_000 };
   },
   unavailableHint: "Install Claude Code and run `claude auth login`.",
   prepare(opts, run) {
@@ -373,7 +304,7 @@ const claude = {
   },
   launch(opts, brief, run, state) {
     // The brief is sent through stdin, never argv.
-    return { ...launchSpec(opts.launcher, claudeArgs(opts, run), state.env), stdin: brief };
+    return { command: opts.launcher, args: claudeArgs(opts, run), env: state.env, stdin: brief };
   },
   scanner: makeEventScanner,
   onEvent(event, state) {

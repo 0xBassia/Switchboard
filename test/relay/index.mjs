@@ -15,6 +15,7 @@ import { runSetup } from "./setup.mjs";
 import { runPi } from "./pi.mjs";
 import { runOmp } from "./omp.mjs";
 import { runWarp } from "./warp.mjs";
+import { runNativeWindows } from "./native-windows.mjs";
 
 export const runners = [
   ["package-shape", runPackageShape],
@@ -34,4 +35,5 @@ export const runners = [
   ["abort", runAbort],
   ["orphan-stdio", runOrphanStdio],
   ["setup", runSetup],
+  ["native-windows", runNativeWindows],
 ];

@@ -17,9 +17,13 @@ You will get an acknowledgement within 7 days. Only the latest release is suppor
 - `switchboard-queue`
 - `switchboard-setup` config handling
 
+## Supported platforms
+
+macOS, Linux and WSL; native Windows is not supported (use WSL). Every relay, the queue and the setup scripts refuse to run on native Windows (exit 2) before reading config or writing anything.
+
 ## Trust model
 
-Relays run as the user, outside any implementer sandbox. Their own `git` calls run with `core.fsmonitor` switched off, without hooks and without writing the index, the repository is pinned before dispatch, and if a Git setting that can run commands changes during a run the relay stops asking Git and reports why in `gitError`. Artifacts are private and never written through links. Relays keep only absolute `PATH` entries, and after the implementer exits they kill whatever it left in its process group (POSIX). An implementer CLI with full write access (no sandbox) can already do anything the user can, so the relay's protections matter most for sandboxed implementers and read-only runs. The read-only tripwire reports writes; it does not prevent them.
+Relays run as the user, outside any implementer sandbox. Their own `git` calls run with `core.fsmonitor` switched off, without hooks and without writing the index, the repository is pinned before dispatch, and if a Git setting that can run commands changes during a run the relay stops asking Git and reports why in `gitError`. Artifacts are private and never written through links. Relays keep only absolute `PATH` entries, and after the implementer exits they kill whatever it left in its process group. An implementer CLI with full write access (no sandbox) can already do anything the user can, so the relay's protections matter most for sandboxed implementers and read-only runs. The read-only tripwire reports writes; it does not prevent them.
 
 ## Untrusted repositories
 

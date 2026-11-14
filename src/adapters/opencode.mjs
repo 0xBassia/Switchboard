@@ -71,16 +71,14 @@
  */
 
 import { exclusive, fail } from "../core/cli.mjs";
-import { IS_WIN, cmdShimMissing } from "../core/proc.mjs";
 import { runRelay } from "../core/relay.mjs";
 import { makeEventScanner } from "../core/scan.mjs";
 import { tripwire } from "../core/tripwire.mjs";
 
-// model/variant reach cmd.exe on win32 (shell:true for the opencode.cmd shim). The
-// model token may carry a variant suffix (provider/model#variant on opencode 2.x), and
-// catalog ids carry '@' (Workers AI @cf/..., Vertex model@default, region@eu) and '~'
-// (OpenRouter/Kilo ~vendor/model-latest aliases). None of '#', '@' or '~' is a cmd.exe
-// metacharacter, and no shell runs off win32. Keep SAFE_TOKEN in lockstep with
+// model/variant ride argv (no shell runs), restricted to plain tokens that cannot pass
+// for a flag. The model token may carry a variant suffix (provider/model#variant on
+// opencode 2.x), and catalog ids carry '@' (Workers AI @cf/..., Vertex model@default,
+// region@eu) and '~' (OpenRouter/Kilo ~vendor/model-latest aliases). Keep SAFE_TOKEN in lockstep with
 // switchboard-setup MODEL_TOKEN.shellSafe, and MODEL_TOKEN with MODEL_TOKEN.opencode.
 const SAFE_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 const MODEL_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:@~/#-]*$/;
@@ -110,7 +108,7 @@ const opencode = {
   },
   validate(opts, flagged) {
     if (opts.readOnly) opts.agent = "plan";
-    // Both ride a cmd.exe command line on win32 (the .cmd shim), so only plain tokens pass.
+    // Both ride argv, so only plain tokens pass.
     if (!SAFE_TOKEN.test(opts.agent)) {
       fail("--agent contains unsupported characters (allowed: letters, digits, . _ : / -)");
     }
@@ -151,10 +149,8 @@ const opencode = {
     cost: state.cost === null ? null : Number(state.cost.toFixed(6)),
   }),
   version: (opts) => ({
-    // On Windows, npm installs `opencode` as a .cmd shim, which needs shell:true to resolve.
-    launch: { command: "opencode", args: ["--version"], shell: IS_WIN },
+    launch: { command: "opencode", args: ["--version"] },
     parse: (out) => (opts.versionText = out.trim()),
-    missing: cmdShimMissing,
   }),
   binary: "opencode",
   // The variant dial depends on the probed version, so check it before dispatch. Core
@@ -186,9 +182,8 @@ const opencode = {
     if (opts.auto && opts.agent !== "plan") args.push("--auto");
     // The brief is piped on stdin. PWD is pinned because OpenCode can resolve its
     // project root from the inherited PWD, which spawn does not rewrite. The argv holds
-    // only flag names and token-validated values (agent, model, variant, session), so
-    // shell:true on win32 (for the .cmd shim) is safe.
-    return { command: "opencode", args, shell: IS_WIN, env: { ...process.env, PWD: opts.cd }, stdin: brief };
+    // only flag names and token-validated values (agent, model, variant, session).
+    return { command: "opencode", args, env: { ...process.env, PWD: opts.cd }, stdin: brief };
   },
   scanner: makeEventScanner,
   onEvent(event, state) {

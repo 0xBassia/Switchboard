@@ -34,7 +34,7 @@ One concept: **lanes**. A lane names an implementer and optional dials.
 
 | Scope | Path |
 | --- | --- |
-| Global | `$XDG_CONFIG_HOME/switchboard/config.json` when `XDG_CONFIG_HOME` is set; otherwise `~/.config/switchboard/config.json` (`os.homedir()` → `HOME` / `USERPROFILE`) |
+| Global | `$XDG_CONFIG_HOME/switchboard/config.json` when `XDG_CONFIG_HOME` is set; otherwise `~/.config/switchboard/config.json` (`os.homedir()` → `HOME`) |
 | Project | `<git-root>/.switchboard/config.json` |
 
 Project overlays global by **whole-lane replace** (same lane name in project fully replaces the global lane).
@@ -63,8 +63,8 @@ Boolean dials: `readOnly`, `force`. All other dials are non-empty strings. Durat
 `timeout` use `h`/`m`/`s` (e.g. `30m`) and must fit the relay watchdog ceiling (~24.8 days).
 Do not combine `readOnly: true` with a write-capable `sandbox` / `force`.
 `model` / `provider` / OpenCode `variant` must match the bound relay’s token rules (e.g. Claude
-rejects spaces; Pi/Oh My Pi/OpenCode/Codex use a shell-safe token set — Windows `shell:true`
-launches, and Oh My Pi's flag-injection defense even without a shell).
+rejects spaces; Pi/Oh My Pi/OpenCode/Codex use a shell-safe token set as flag-injection
+defense, though no relay launches through a shell).
 
 ## Helpers
 

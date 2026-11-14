@@ -14,7 +14,6 @@ import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const POSIX = process.platform !== "win32";
 let temp;
 let relay;
 let brief;
@@ -178,7 +177,7 @@ test("an event handler error is recorded without failing a good run", () => {
   assert.deepEqual(result.eventErrors, ["adapter bug"]);
 });
 
-test("an adapter bug still writes a result and kills the implementer", { skip: !POSIX }, async () => {
+test("an adapter bug still writes a result and kills the implementer", async () => {
   const { outDir, argv } = args();
   const pidFile = join(temp, "boom.pid");
   const run = spawnSync(process.execPath, argv, {
@@ -195,7 +194,7 @@ test("an adapter bug still writes a result and kills the implementer", { skip: !
   assert.equal(alive(pid), false, "the implementer outlived the crashed relay");
 });
 
-test("a repeat signal during the abort grace is ignored", { skip: !POSIX }, async () => {
+test("a repeat signal during the abort grace is ignored", async () => {
   const { outDir, argv } = args();
   const pidFile = join(temp, "abort.pid");
   const child = spawn(process.execPath, argv, { env: env({ FAKE_RUN: "hang", FAKE_PID: pidFile }), stdio: "ignore" });
@@ -213,7 +212,7 @@ test("a repeat signal during the abort grace is ignored", { skip: !POSIX }, asyn
   assert.equal(alive(Number(readFileSync(pidFile, "utf8"))), false);
 });
 
-test("artifacts are private", { skip: !POSIX }, () => {
+test("artifacts are private", () => {
   const { outDir, argv } = args();
   const run = spawnSync(process.execPath, argv, { env: env({ FAKE_EVENTS: JSON.stringify([{ text: "secret" }]) }), encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
@@ -222,7 +221,7 @@ test("artifacts are private", { skip: !POSIX }, () => {
   }
 });
 
-test("a symlink planted at final.txt mid-run is left alone, never written through", { skip: !POSIX }, () => {
+test("a symlink planted at final.txt mid-run is left alone, never written through", () => {
   const { outDir, argv } = args();
   const victim = join(temp, "victim.txt");
   writeFileSync(victim, "untouched\n");
@@ -236,7 +235,7 @@ test("a symlink planted at final.txt mid-run is left alone, never written throug
   assert.equal(lstatSync(join(outDir, "final.txt")).isSymbolicLink(), true);
 });
 
-test("events.jsonl and stderr.txt swapped for links mid-run are never written through", { skip: !POSIX }, () => {
+test("events.jsonl and stderr.txt swapped for links mid-run are never written through", () => {
   const { outDir, argv } = args();
   const victims = [join(temp, "victim-events"), join(temp, "victim-stderr")];
   for (const victim of victims) writeFileSync(victim, "untouched\n");
@@ -303,7 +302,7 @@ function runIn(cwd, extraEnv) {
   return { run, outDir };
 }
 
-test("a fsmonitor hook planted in a nested repository under --cd never runs", { skip: !POSIX }, () => {
+test("a fsmonitor hook planted in a nested repository under --cd never runs", () => {
   const repo = gitRepo("fsmonitor-nested");
   const marker = join(temp, "fsmonitor-nested-ran");
   const { run, outDir } = runIn(join(repo, "sub"), {
@@ -314,7 +313,7 @@ test("a fsmonitor hook planted in a nested repository under --cd never runs", { 
   assert.equal(readResult(outDir).status, "completed");
 });
 
-test("a fsmonitor hook written into the repository config never runs, and git stops reporting", { skip: !POSIX }, () => {
+test("a fsmonitor hook written into the repository config never runs, and git stops reporting", () => {
   const repo = gitRepo("fsmonitor-top");
   const marker = join(temp, "fsmonitor-top-ran");
   const { run, outDir } = runIn(repo, { FAKE_SHELL: `git config core.fsmonitor "touch '${marker}'"` });
@@ -323,7 +322,7 @@ test("a fsmonitor hook written into the repository config never runs, and git st
   assert.equal(readResult(outDir).touchedFiles, null, "git output from a tampered repository was trusted");
 });
 
-test("read-only: a write hidden with skip-worktree or assume-unchanged is a violation", { skip: !POSIX }, () => {
+test("read-only: a write hidden with skip-worktree or assume-unchanged is a violation", () => {
   for (const flag of ["--skip-worktree", "--assume-unchanged"]) {
     const repo = gitRepo(`hidden${flag}`);
     const { run, outDir } = runIn(repo, { FAKE_READ_ONLY: "1", FAKE_SHELL: `git update-index ${flag} a.txt && echo changed > a.txt` });
@@ -332,7 +331,7 @@ test("read-only: a write hidden with skip-worktree or assume-unchanged is a viol
   }
 });
 
-test("read-only: a background write after the implementer exits cannot land unseen", { skip: !POSIX }, async () => {
+test("read-only: a background write after the implementer exits cannot land unseen", async () => {
   const repo = gitRepo("late-write");
   const { run, outDir } = runIn(repo, { FAKE_READ_ONLY: "1", FAKE_SHELL: "(sleep 1; echo late > a.txt) >/dev/null 2>&1 &" });
   assert.equal(run.status, 0, run.stderr);
@@ -341,7 +340,7 @@ test("read-only: a background write after the implementer exits cannot land unse
   assert.equal(readResult(outDir).readOnlyViolation, false);
 });
 
-test("a filter defined in an included config file inside the worktree never runs", { skip: !POSIX }, () => {
+test("a filter defined in an included config file inside the worktree never runs", () => {
   const repo = gitRepo("include-filter");
   spawnSync("git", ["config", "include.path", "../team.gitconfig"], { cwd: repo });
   writeFileSync(join(repo, "team.gitconfig"), "[core]\n");
@@ -356,7 +355,7 @@ test("a filter defined in an included config file inside the worktree never runs
   assert.match(result.gitError, /changed during the run/);
 });
 
-test("ordinary git config writes (a branch switch) keep touchedFiles", { skip: !POSIX }, () => {
+test("ordinary git config writes (a branch switch) keep touchedFiles", () => {
   const repo = gitRepo("ordinary-config");
   const { run, outDir } = runIn(repo, { FAKE_SHELL: "git config branch.feature.remote origin && echo x > new.txt" });
   assert.equal(run.status, 0, run.stderr);
@@ -365,14 +364,14 @@ test("ordinary git config writes (a branch switch) keep touchedFiles", { skip: !
   assert.equal(result.gitError, undefined);
 });
 
-test("read-only: a commit, or a file hidden through info/exclude, is a violation", { skip: !POSIX }, () => {
+test("read-only: a commit, or a file hidden through info/exclude, is a violation", () => {
   const commit = runIn(gitRepo("ro-commit"), { FAKE_READ_ONLY: "1", FAKE_SHELL: "echo changed > a.txt && git -c user.name=t -c user.email=t@example.invalid commit -qam x" });
   assert.equal(readResult(commit.outDir).readOnlyViolation, true, "commit");
   const exclude = runIn(gitRepo("ro-exclude"), { FAKE_READ_ONLY: "1", FAKE_SHELL: "echo x > hidden.txt && echo hidden.txt >> .git/info/exclude" });
   assert.equal(readResult(exclude.outDir).readOnlyViolation, true, "info/exclude");
 });
 
-test("an empty PATH entry cannot make the checkout supply git", { skip: !POSIX }, () => {
+test("an empty PATH entry cannot make the checkout supply git", () => {
   const repo = gitRepo("path-hijack");
   const marker = join(temp, "path-hijack-ran");
   writeFileSync(join(repo, "git"), `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
@@ -381,7 +380,7 @@ test("an empty PATH entry cannot make the checkout supply git", { skip: !POSIX }
   assert.equal(existsSync(marker), false, "a git committed in the checkout ran");
 });
 
-test("a hook planted in .git/hooks never runs from the relay's own git status", { skip: !POSIX }, () => {
+test("a hook planted in .git/hooks never runs from the relay's own git status", () => {
   const repo = gitRepo("index-hook");
   const marker = join(temp, "index-hook-ran");
   const { run, outDir } = runIn(repo, {
@@ -392,7 +391,7 @@ test("a hook planted in .git/hooks never runs from the relay's own git status", 
   assert.deepEqual(readResult(outDir).touchedFiles, [" M a.txt"]);
 });
 
-test("a filter planted in a submodule's own config never runs", { skip: !POSIX }, () => {
+test("a filter planted in a submodule's own config never runs", () => {
   const source = gitRepo("submodule-source");
   const repo = gitRepo("submodule-host");
   spawnSync("git", ["-c", "protocol.file.allow=always", "submodule", "add", "-q", source, "mod"], { cwd: repo });
@@ -406,19 +405,19 @@ test("a filter planted in a submodule's own config never runs", { skip: !POSIX }
   assert.equal(readResult(outDir).touchedFiles, null);
 });
 
-test("read-only: files hidden by a self-ignoring .gitignore or a new excludesFile are a violation", { skip: !POSIX }, () => {
+test("read-only: files hidden by a self-ignoring .gitignore or a new excludesFile are a violation", () => {
   const selfIgnoring = runIn(gitRepo("ro-self-ignore"), { FAKE_READ_ONLY: "1", FAKE_SHELL: "mkdir nd && echo '*' > nd/.gitignore && echo evil > nd/evil.txt" });
   assert.equal(readResult(selfIgnoring.outDir).readOnlyViolation, true, "self-ignoring .gitignore");
   const excludes = runIn(gitRepo("ro-excludesfile"), { FAKE_READ_ONLY: "1", FAKE_SHELL: `echo '*.txt' > ${join(temp, "ro-excludes-list")} && git config core.excludesFile ${join(temp, "ro-excludes-list")} && echo x > new.txt` });
   assert.equal(readResult(excludes.outDir).readOnlyViolation, true, "core.excludesFile");
 });
 
-test("read-only: a fetch that only moves remote-tracking refs is not a violation", { skip: !POSIX }, () => {
+test("read-only: a fetch that only moves remote-tracking refs is not a violation", () => {
   const { outDir } = runIn(gitRepo("ro-remote-ref"), { FAKE_READ_ONLY: "1", FAKE_SHELL: "git update-ref refs/remotes/origin/main HEAD" });
   assert.equal(readResult(outDir).readOnlyViolation, false);
 });
 
-test("a filter configured before the run never runs when the implementer adds a .gitattributes line", { skip: !POSIX }, () => {
+test("a filter configured before the run never runs when the implementer adds a .gitattributes line", () => {
   const repo = gitRepo("attributes-filter");
   const marker = join(temp, "attributes-filter-ran");
   spawnSync("git", ["config", "filter.atk.clean", `touch '${marker}'; cat`], { cwd: repo });
@@ -428,7 +427,7 @@ test("a filter configured before the run never runs when the implementer adds a 
   assert.deepEqual(readResult(outDir).touchedFiles, [" M a.txt", "?? .gitattributes"]);
 });
 
-test("read-only: a rewritten self-ignored .gitignore, a rewritten excludesFile, or a custom ref is a violation", { skip: !POSIX }, () => {
+test("read-only: a rewritten self-ignored .gitignore, a rewritten excludesFile, or a custom ref is a violation", () => {
   const ignoredRepo = gitRepo("ro-ignore-content");
   mkdirSync(join(ignoredRepo, "nd"));
   writeFileSync(join(ignoredRepo, "nd", ".gitignore"), ".gitignore\n");
@@ -444,7 +443,7 @@ test("read-only: a rewritten self-ignored .gitignore, a rewritten excludesFile, 
   assert.equal(readResult(ref.outDir).readOnlyViolation, true, "custom ref");
 });
 
-test("an out-dir renamed and replaced by a link mid-run never receives final.txt or result.json", { skip: !POSIX }, () => {
+test("an out-dir renamed and replaced by a link mid-run never receives final.txt or result.json", () => {
   const repo = gitRepo("outdir-swap");
   const victim = join(temp, "outdir-swap-victim");
   mkdirSync(victim);
@@ -455,7 +454,7 @@ test("an out-dir renamed and replaced by a link mid-run never receives final.txt
   assert.match(run.stdout, /not written/);
 });
 
-test("an --out-dir that is, or goes through, a symlink is refused before anything is written", { skip: !POSIX }, () => {
+test("an --out-dir that is, or goes through, a symlink is refused before anything is written", () => {
   const repo = gitRepo("outdir-static-link");
   const victim = join(temp, "outdir-static-victim");
   mkdirSync(victim);
@@ -473,7 +472,7 @@ test("an --out-dir that is, or goes through, a symlink is refused before anythin
   assert.equal(readFileSync(join(victim, "result.json"), "utf8"), "user file\n");
 });
 
-test("a child left behind by the version probe is killed before dispatch", { skip: !POSIX }, async () => {
+test("a child left behind by the version probe is killed before dispatch", async () => {
   const marker = join(temp, "probe-orphan-ran");
   const { argv, outDir } = args();
   const run = spawnSync(process.execPath, argv, { env: env({ FAKE_VERSION: "orphan", FAKE_ORPHAN: marker }), encoding: "utf8" });
@@ -492,7 +491,7 @@ test("a refusal from prepare() still writes result.json and keeps exit 2", () =>
   assert.match(result.error, /cannot take that flag; fake was not dispatched/);
 });
 
-test("the stall watchdog fells a silent run long before --timeout", { skip: !POSIX }, async () => {
+test("the stall watchdog fells a silent run long before --timeout", async () => {
   const { outDir, argv } = args(["--timeout", "5m"]);
   const pidFile = join(temp, "stall.pid");
   const started = Date.now();
@@ -524,7 +523,7 @@ test("a file that lands on final.txt mid-run is never replaced", () => {
   assert.equal(readFileSync(join(outDir, "final.txt"), "utf8"), "user file\n");
 });
 
-test("a dangling symlink planted at final.txt is left alone too", { skip: !POSIX }, () => {
+test("a dangling symlink planted at final.txt is left alone too", () => {
   const { outDir, argv } = args();
   const run = spawnSync(process.execPath, argv, {
     env: env({ FAKE_PLANT: join(outDir, "final.txt"), FAKE_VICTIM: join(temp, "does-not-exist"), FAKE_EVENTS: JSON.stringify([{ text: "report" }]) }),

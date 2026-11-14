@@ -92,20 +92,10 @@
  * itself was killed and forwarded the kill to codex), or codex_unavailable. An
  * orchestrator that polls for the file must therefore also treat a non-zero exit
  * with no file as a usage error.
- *
- * Windows: a sandboxed run (read-only or workspace-write) gets a PATH with every
- * `WindowsApps` entry removed, for the preflight and the dispatch alike. The Microsoft
- * Store installs apps — including PowerShell 7 — under a folder whose ACLs deny
- * execution to the restricted token Codex's sandbox runs commands with, and Codex
- * prefers a `pwsh` found on PATH, so a Store `pwsh` makes every sandboxed command
- * fail with 0xC0070005. Without those entries Codex falls back to System32
- * powershell.exe. `--sandbox danger-full-access` runs without the restricted token
- * and gets PATH unchanged.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { exclusive, fail } from "../core/cli.mjs";
-import { IS_WIN, cmdShimMissing } from "../core/proc.mjs";
 import { runRelay } from "../core/relay.mjs";
 import { makeLineScanner } from "../core/scan.mjs";
 import { tripwire } from "../core/tripwire.mjs";
@@ -113,18 +103,14 @@ import { tripwire } from "../core/tripwire.mjs";
 const SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"];
 const SAFE_SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const SAFE_ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-// Model reaches cmd.exe on win32 (shell:true for the codex.cmd shim) - same shell-safe
-// family as pi. Keep in lockstep with switchboard-setup MODEL_TOKEN.shellSafe.
+// Model rides argv; a plain token cannot pass for a flag. Same family as pi. Keep in
+// lockstep with switchboard-setup MODEL_TOKEN.shellSafe.
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 // Effort and web search modes are Codex-owned enums that vary by version; the relay
-// checks only for a bare token, which also keeps them inert in cmd.exe on win32.
+// checks only for a bare token.
 const BARE_TOKEN = /^[a-z][a-z0-9-]*$/i;
 const KEEP_ENV = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM",
-  "TMPDIR", "CODEX_HOME", "SystemRoot", "SystemDrive", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
-  "TEMP", "TMP", "PATHEXT", "COMSPEC"];
-// Both Store roots: "C:\Program Files\WindowsApps\<package>" and the per-user alias
-// folder "%LOCALAPPDATA%\Microsoft\WindowsApps" (a symlink into the same protected tree).
-const WINDOWS_APPS_PATH_ENTRY = /(^|[\\/])WindowsApps([\\/]|$)/i;
+  "TMPDIR", "CODEX_HOME", "TEMP", "TMP"];
 
 function codexEnv(opts) {
   const env = opts.cleanEnv
@@ -132,15 +118,9 @@ function codexEnv(opts) {
     : { ...process.env };
   if (opts.cleanEnv) {
     // The relay's own hardening survives a clean environment: core.fsmonitor stays off
-    // (GIT_CONFIG_*), and Windows never resolves a bare command in the checkout.
+    // (GIT_CONFIG_*).
     for (const key of Object.keys(process.env)) {
-      if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/.test(key) || key === "NoDefaultCurrentDirectoryInExePath") env[key] = process.env[key];
-    }
-  }
-  if (IS_WIN && opts.sandbox !== "danger-full-access") {
-    // A spread copy keeps the original key casing ("Path"); rewrite every spelling.
-    for (const key of Object.keys(env)) {
-      if (key.toUpperCase() === "PATH") env[key] = env[key].split(";").filter((entry) => !WINDOWS_APPS_PATH_ENTRY.test(entry)).join(";");
+      if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) env[key] = process.env[key];
     }
   }
   return env;
@@ -155,9 +135,7 @@ function codexArgs(opts, finalPath) {
   if (resuming && opts.sandboxConfigured) args.push("-s", opts.sandbox);
   if (opts.session) args.push("resume", opts.session);
   else if (opts.resumeLast) args.push("resume", "--last");
-  // shell:true on win32 does not quote args, so a temp path with spaces would split;
-  // quote the only spaceable arg.
-  args.push("--json", "-o", IS_WIN ? `"${finalPath}"` : finalPath);
+  args.push("--json", "-o", finalPath);
   if (!resuming) args.push("-s", opts.sandbox);
   if (opts.model) args.push("-m", opts.model);
   // `-c` is accepted by the resume subcommand, so these overrides apply to fresh and
@@ -247,7 +225,6 @@ const codex = {
     const unset = opts.keepEnv.find((name) => process.env[name] === undefined);
     if (unset) fail(`--keep-env "${unset}" is not set`);
     exclusive(opts, [["session", "resumeLast", "--session and --resume-last are mutually exclusive; pass only one"]]);
-    // Reaches cmd.exe on win32 (shell:true for the codex.cmd shim).
     if (opts.session !== null && !SAFE_SESSION.test(opts.session)) {
       fail("--session must be a shell-safe thread id (letters, digits, . _ : -)");
     }
@@ -270,19 +247,15 @@ const codex = {
     threadId: state.sessionId,
   }),
   version: (opts) => ({
-    // On Windows, npm installs `codex` as a .cmd shim, which needs shell:true to resolve.
-    launch: { command: "codex", args: ["--version"], shell: IS_WIN, env: codexEnv(opts) },
-    missing: cmdShimMissing,
+    launch: { command: "codex", args: ["--version"], env: codexEnv(opts) },
   }),
   binary: "codex",
   unavailableHint: "Install it (npm i -g @openai/codex) and run `codex login`.",
   prepare: (opts, run, state) => { state.finalPath = run.finalPath; },
-  // The brief goes through stdin, never argv. With shell:true the argv holds only
-  // sandbox enums, validated model names and tokens, fixed overrides, and quoted paths.
+  // The brief goes through stdin, never argv, and no shell runs.
   launch: (opts, brief, run) => ({
     command: "codex",
     args: codexArgs(opts, run.finalPath),
-    shell: IS_WIN,
     env: codexEnv(opts),
     stdin: brief,
   }),

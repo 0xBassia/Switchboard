@@ -175,7 +175,7 @@ function exclusive(opts, pairs) {
 }
 
 
-// Briefs saved by Windows PowerShell 5.1 (`>` and Out-File) are UTF-16 with a BOM;
+// Some editors and PowerShell (`>` and Out-File) save briefs as UTF-16 with a BOM;
 // decode the common BOMs instead of dispatching mojibake, and refuse NUL bytes, which
 // no CLI's argv accepts anyway.
 function decodeBrief(bytes, label) {
@@ -219,146 +219,6 @@ function readBrief(opts) {
   return decodeBrief(bytes, "the brief on stdin");
 }
 
-// ---- src/core/proc.mjs
-
-const IS_WIN = process.platform === "win32";
-
-
-// Windows looks for a bare command in the current directory before PATH: cmd.exe
-// always, CreateProcess unless this variable is set. The --cd checkout is untrusted,
-// so it must never get to supply `git`, `taskkill` or the implementer itself. The
-// implementer inherits it, which is the safe default there too.
-// POSIX lookup treats an empty or relative PATH entry (a stray ":" from PATH=$X:$PATH)
-// as a directory relative to the child's cwd, which is the untrusted --cd checkout, so
-// only absolute entries are kept, for the relay and everything it starts.
-function guardExePath() {
-  if (IS_WIN && !process.env.NoDefaultCurrentDirectoryInExePath) process.env.NoDefaultCurrentDirectoryInExePath = "1";
-  for (const key of Object.keys(process.env).filter((name) => name.toUpperCase() === "PATH")) {
-    const entries = process.env[key].split(IS_WIN ? ";" : ":");
-    const kept = entries.filter((entry) => isAbsolute(entry.replace(/^"(.*)"$/, "$1")));
-    if (kept.length !== entries.length) process.env[key] = kept.join(IS_WIN ? ";" : ":");
-  }
-}
-
-
-function signalExitCode(signal, fallback = 15) {
-  return 128 + (constants.signals[signal] || fallback);
-}
-
-
-function killChild(child, signal = "SIGTERM") {
-  if (!child || !child.pid) return;
-  if (process.platform === "win32") {
-    if (signal !== "SIGTERM") return;
-    guardExePath();
-    try {
-      // By full path: PATH (even with only absolute entries) never supplies it.
-      execFileSync(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(child.pid), "/t", "/f"], {
-        stdio: ["ignore", "ignore", "inherit"],
-      });
-    } catch {
-      // The process tree already exited.
-    }
-    return;
-  }
-  try {
-    process.kill(-child.pid, signal);
-  } catch {
-    try {
-      child.kill(signal);
-    } catch {
-      // The process group already exited.
-    }
-  }
-}
-
-
-// launch: { command, args, shell?, verbatim?, env?, cwd?, stdin? }
-// POSIX children lead a new process group so killChild reaches grandchildren.
-// With `shell` the command line is serialized once (Node 24 warns on shell:true
-// plus an args array); callers must pass only token-validated or quoted args.
-function spawnLaunch(launch, extra = {}) {
-  guardExePath();
-  const options = {
-    cwd: launch.cwd,
-    env: IS_WIN ? { NoDefaultCurrentDirectoryInExePath: "1", ...(launch.env || process.env) } : (launch.env || process.env),
-    stdio: [launch.stdin === undefined || launch.stdin === null ? "ignore" : "pipe", "pipe", "pipe"],
-    detached: !IS_WIN,
-    windowsHide: true,
-    ...(launch.verbatim ? { windowsVerbatimArguments: true } : {}),
-    ...extra,
-  };
-  if (launch.shell) return spawn([launch.command, ...launch.args].join(" "), { ...options, shell: true });
-  return spawn(launch.command, launch.args, options);
-}
-
-
-// Runs `launch` to completion with a hard deadline and resolves with
-// { version, error }. `version` is null with no error when the binary is
-// missing; any other failure is an error, shaped like execFileSync's
-// (code: "ETIMEDOUT" | status | stderr), so a broken CLI is never dispatched to.
-function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), onChild, missing } = {}) {
-  return new Promise((done) => {
-    let child;
-    try {
-      child = spawnLaunch({ ...launch, stdin: null });
-    } catch (error) {
-      done({ version: null, error: error.code === "ENOENT" ? null : error });
-      return;
-    }
-    if (onChild) onChild(child);
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let finished = false;
-    const finish = (value) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timer);
-      // Whatever the outcome, nothing the probe started may outlive it: a --version that
-      // forks a background child would otherwise keep running through dispatch.
-      // POSIX process group only (SIGKILL is a no-op on Windows).
-      killChild(child, "SIGKILL");
-      if (onChild) onChild(null);
-      done(value);
-    };
-    const timer = setTimeout(() => {
-      timedOut = true;
-      killChild(child, IS_WIN ? "SIGTERM" : "SIGKILL");
-      child.stdout.destroy();
-      child.stderr.destroy();
-      // If the kill cannot land, "close" may never fire; do not wait on it.
-      setTimeout(() => finish({ version: null, error: Object.assign(new Error("version probe timed out"), { code: "ETIMEDOUT", stderr }) }), 2_000).unref();
-    }, timeoutMs);
-    child.stdout.on("data", (chunk) => { if (stdout.length < 65_536) stdout += chunk; });
-    child.stderr.on("data", (chunk) => { if (stderr.length < 65_536) stderr += chunk; });
-    child.on("error", (error) => {
-      finish({ version: null, error: error.code === "ENOENT" ? null : error });
-    });
-    child.on("close", (code, signal) => {
-      if (timedOut) {
-        finish({ version: null, error: Object.assign(new Error("version probe timed out"), { code: "ETIMEDOUT", stderr }) });
-        return;
-      }
-      if (missing && missing(code, stderr)) {
-        finish({ version: null, error: null });
-        return;
-      }
-      if (code !== 0) {
-        finish({ version: null, error: Object.assign(new Error(`version probe exited ${code ?? signal}`), { status: code, signal, stderr }) });
-        return;
-      }
-      finish({ version: parse(stdout, stderr) || "unknown", error: null });
-    });
-  });
-}
-
-
-// cmd.exe reports a missing command as exit 9009 or "is not recognized" text.
-function cmdShimMissing(code, stderr) {
-  return IS_WIN && (code === 9009 || /is not recognized as an internal or external command/i.test(stderr));
-}
-
 // ---- src/core/duration.mjs
 
 const MAX_TIMER_MS = 2_147_483_647;
@@ -378,6 +238,116 @@ function parseDuration(duration) {
   } catch {
     return null;
   }
+}
+
+// ---- src/core/proc.mjs
+
+function refuseNativeWindows() {
+  if (process.platform !== "win32") return;
+  process.stderr.write("switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
+  process.exit(2);
+}
+
+
+// POSIX lookup treats an empty or relative PATH entry (a stray ":" from PATH=$X:$PATH)
+// as a directory relative to the child's cwd, which is the untrusted --cd checkout, so
+// only absolute entries are kept, for the relay and everything it starts.
+function guardExePath() {
+  if (process.env.PATH === undefined) return;
+  const entries = process.env.PATH.split(":");
+  const kept = entries.filter((entry) => isAbsolute(entry));
+  if (kept.length !== entries.length) process.env.PATH = kept.join(":");
+}
+
+
+function signalExitCode(signal, fallback = 15) {
+  return 128 + (constants.signals[signal] || fallback);
+}
+
+
+function killChild(child, signal = "SIGTERM") {
+  if (!child || !child.pid) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // The process group already exited.
+    }
+  }
+}
+
+
+// launch: { command, args, env?, cwd?, stdin? }
+// Children lead a new process group so killChild reaches grandchildren. No shell
+// ever runs: the command and its args go to execve as they are.
+function spawnLaunch(launch, extra = {}) {
+  guardExePath();
+  const options = {
+    cwd: launch.cwd,
+    env: launch.env || process.env,
+    stdio: [launch.stdin === undefined || launch.stdin === null ? "ignore" : "pipe", "pipe", "pipe"],
+    detached: true,
+    ...extra,
+  };
+  return spawn(launch.command, launch.args, options);
+}
+
+
+// Runs `launch` to completion with a hard deadline and resolves with
+// { version, error }. `version` is null with no error when the binary is
+// missing; any other failure is an error, shaped like execFileSync's
+// (code: "ETIMEDOUT" | status | stderr), so a broken CLI is never dispatched to.
+function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), onChild } = {}) {
+  return new Promise((done) => {
+    let child;
+    try {
+      child = spawnLaunch({ ...launch, stdin: null });
+    } catch (error) {
+      done({ version: null, error: error.code === "ENOENT" ? null : error });
+      return;
+    }
+    if (onChild) onChild(child);
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let finished = false;
+    const finish = (value) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      // Whatever the outcome, nothing the probe started may outlive it: a --version that
+      // forks a background child would otherwise keep running through dispatch.
+      killChild(child, "SIGKILL");
+      if (onChild) onChild(null);
+      done(value);
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killChild(child, "SIGKILL");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      // If the kill cannot land, "close" may never fire; do not wait on it.
+      setTimeout(() => finish({ version: null, error: Object.assign(new Error("version probe timed out"), { code: "ETIMEDOUT", stderr }) }), 2_000).unref();
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { if (stdout.length < 65_536) stdout += chunk; });
+    child.stderr.on("data", (chunk) => { if (stderr.length < 65_536) stderr += chunk; });
+    child.on("error", (error) => {
+      finish({ version: null, error: error.code === "ENOENT" ? null : error });
+    });
+    child.on("close", (code, signal) => {
+      if (timedOut) {
+        finish({ version: null, error: Object.assign(new Error("version probe timed out"), { code: "ETIMEDOUT", stderr }) });
+        return;
+      }
+      if (code !== 0) {
+        finish({ version: null, error: Object.assign(new Error(`version probe exited ${code ?? signal}`), { status: code, signal, stderr }) });
+        return;
+      }
+      finish({ version: parse(stdout, stderr) || "unknown", error: null });
+    });
+  });
 }
 
 // ---- src/core/git.mjs
@@ -996,13 +966,16 @@ function onRelaySignals(handler) {
 
 // See src/README.md for the adapter contract.
 async function runRelay(a) {
+  // --help still answers; anything else on native Windows stops here, before any
+  // lane lookup or artifact.
+  const { opts, flagged } = parseArgs(process.argv.slice(2), a.flags || {}, { timeout: null, ...a.defaults });
+  refuseNativeWindows();
   guardExePath();
   hardenGit();
   const name = a.name || a.key;
   // Result identity (`tool`, `<slug>_unavailable`) can differ from the lane key.
   const slug = a.slug || a.key;
   const unavailableStatus = `${slug.replace(/-/g, "_")}_unavailable`;
-  const { opts, flagged } = parseArgs(process.argv.slice(2), a.flags || {}, { timeout: null, ...a.defaults });
   applyFleetLane(opts, flagged, a.key, { conflicts: a.laneConflicts, onDial: a.onDial });
   if (opts.timeout !== null && parseDuration(opts.timeout) === null) {
     fail(`--timeout "${opts.timeout}" is invalid or too long; use a positive h/m/s duration no longer than about 24 days`);
@@ -1041,7 +1014,7 @@ async function runRelay(a) {
       finalMessage: "",
       error: `the relay was killed by ${signal} during the ${name} version preflight; ${name} was not dispatched`,
     });
-    if (probeChild) killChild(probeChild, IS_WIN ? "SIGTERM" : "SIGKILL");
+    if (probeChild) killChild(probeChild, "SIGKILL");
     process.exit(result.exitCode);
   });
   // Before dispatch: the repository every later git call is held to.
@@ -1104,7 +1077,7 @@ async function runRelay(a) {
   // Last line of defence: a bug in an adapter hook must still leave a result and
   // must not orphan the implementer's process group.
   const crash = (error) => {
-    killChild(guard.child, IS_WIN ? "SIGTERM" : "SIGKILL");
+    killChild(guard.child, "SIGKILL");
     try {
       report({ status: "failed", exitCode: 1, signal: null, error: `relay internal error: ${error && error.stack ? error.stack : error}` });
     } catch {
@@ -1137,7 +1110,6 @@ async function runRelay(a) {
     const probeTimeoutMs = probe.timeoutMs ?? Math.min(timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS, DEFAULT_PROBE_TIMEOUT_MS);
     const outcome = await probeVersion({ cwd: opts.cd, ...probe.launch }, probeTimeoutMs, {
       parse: probe.parse,
-      missing: probe.missing,
       onChild: (child) => { probeChild = child; guard.child = child; },
     });
     version = outcome.version;
@@ -1186,17 +1158,6 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
   let child;
   try {
     launch = { cwd: opts.cd, ...a.launch(opts, brief, run, state) };
-    // cmd.exe cannot start in a UNC directory: it falls back to %SystemRoot% with a
-    // warning, and the brief would run there while the report names the share.
-    if (IS_WIN && (launch.shell || /(^|[\\/])cmd\.exe$/i.test(launch.command))) {
-      if (/^\\\\[^?.\\]/.test(launch.cwd)) {
-        throw new Error(`--cd is a UNC path and ${name} launches through cmd.exe, which cannot run in one; map the share to a drive letter first`);
-      }
-      // Paths reach cmd.exe inside quotes, where %VAR% and !VAR! still expand.
-      if ([opts.cd, run.outDir].some((path) => /[\0\r\n"%!]/.test(path))) {
-        throw new Error(`${name} launches through cmd.exe, which would rewrite %, ! or a quote in --cd or --out-dir; use a path without them`);
-      }
-    }
     child = spawnLaunch(launch);
     guard.child = child;
   } catch (error) {
@@ -1290,7 +1251,7 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
   }
 
   // The relay's own death must still produce a result, and must take the
-  // implementer with it. SIGTERM/SIGHUP registration is a no-op on Windows.
+  // implementer with it.
   onRelaySignals((signal) => {
     if (!settle()) return;
     child.once("exit", dropPipes);
@@ -1354,7 +1315,7 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
     if (a.onStderr) a.onStderr(stderrDecoder.end(), state);
     // Nothing the implementer left in its process group may outlive the report: a background
     // job could write after the tripwire's last look (a process that left the group with
-    // setsid is out of reach). POSIX only; on Windows the leftovers keep running.
+    // setsid is out of reach).
     killChild(child, "SIGKILL");
     privatizeArtifacts(run);
     let judged = !watchdogFired && a.verdict ? a.verdict(state, { code, signal }) || {} : {};
@@ -1603,8 +1564,7 @@ function canonicalFilePath(path) {
 function gitPathKey(root, path) {
   let canonicalRoot;
   try { canonicalRoot = realpathSync.native(root); } catch { canonicalRoot = resolve(root); }
-  const key = relative(canonicalRoot, canonicalFilePath(path));
-  return process.platform === "win32" ? key.replaceAll("\\", "/") : key;
+  return relative(canonicalRoot, canonicalFilePath(path));
 }
 
 
@@ -1893,7 +1853,7 @@ const opencode = {
   },
   validate(opts, flagged) {
     if (opts.readOnly) opts.agent = "plan";
-    // Both ride a cmd.exe command line on win32 (the .cmd shim), so only plain tokens pass.
+    // Both ride argv, so only plain tokens pass.
     if (!SAFE_TOKEN.test(opts.agent)) {
       fail("--agent contains unsupported characters (allowed: letters, digits, . _ : / -)");
     }
@@ -1934,10 +1894,8 @@ const opencode = {
     cost: state.cost === null ? null : Number(state.cost.toFixed(6)),
   }),
   version: (opts) => ({
-    // On Windows, npm installs `opencode` as a .cmd shim, which needs shell:true to resolve.
-    launch: { command: "opencode", args: ["--version"], shell: IS_WIN },
+    launch: { command: "opencode", args: ["--version"] },
     parse: (out) => (opts.versionText = out.trim()),
-    missing: cmdShimMissing,
   }),
   binary: "opencode",
   // The variant dial depends on the probed version, so check it before dispatch. Core
@@ -1969,9 +1927,8 @@ const opencode = {
     if (opts.auto && opts.agent !== "plan") args.push("--auto");
     // The brief is piped on stdin. PWD is pinned because OpenCode can resolve its
     // project root from the inherited PWD, which spawn does not rewrite. The argv holds
-    // only flag names and token-validated values (agent, model, variant, session), so
-    // shell:true on win32 (for the .cmd shim) is safe.
-    return { command: "opencode", args, shell: IS_WIN, env: { ...process.env, PWD: opts.cd }, stdin: brief };
+    // only flag names and token-validated values (agent, model, variant, session).
+    return { command: "opencode", args, env: { ...process.env, PWD: opts.cd }, stdin: brief };
   },
   scanner: makeEventScanner,
   onEvent(event, state) {

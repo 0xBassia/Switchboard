@@ -21,11 +21,11 @@ body:
     id: os
     attributes:
       label: OS
+      description: macOS, Linux and WSL are supported; native Windows is not (use WSL).
       options:
         - macOS
         - Linux
-        - Windows (native)
-        - Windows (WSL/Git Bash)
+        - WSL
   - type: textarea
     id: command
     attributes:

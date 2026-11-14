@@ -9,7 +9,7 @@ description: >-
   to a second implementer if the first is unavailable. Not for a single task with one known
   implementer: use that implementer's switchboard-* skill directly.
 license: MIT
-compatibility: Requires Node 18+, git 2.31+, and the implementer skills for every implementer a task names. Lanes require switchboard-setup.
+compatibility: Requires Node 18+, git 2.31+, and the implementer skills for every implementer a task names. Lanes require switchboard-setup. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).
 metadata:
   version: 1.1.0
 ---
@@ -60,7 +60,7 @@ For one task with one known implementer, use that implementer's `switchboard-<cl
      live checkout.
    - `id` names the task's branch (`switchboard/<run>-<id>`), so it must also be a valid git ref
      component: no `..`, no trailing `.` or `.lock`. Ids that differ only by letter case are
-     refused, because branch and directory names collide by case on macOS and Windows.
+     refused, because branch and directory names collide by case on macOS.
 4. **Run it** from the repository:
 
    ```bash
@@ -140,10 +140,8 @@ or stalled is **not** retried, because it may already have changed files. Inspec
   the implementers report them (reviews included).
 
 Exit code 0 means every task completed and every requested review approved; 1 means at least one did not; 2 is a usage error before any
-run. Stopping the queue (SIGTERM or Ctrl-C) stops every running relay: on macOS and Linux each
-relay records its own `aborted` result; on Windows, which has no catchable SIGTERM, the queue
-terminates each relay's process tree and records the abort itself (the attempt has no
-`resultPath`). Unstarted tasks are marked `skipped`.
+run. Stopping the queue (SIGTERM or Ctrl-C) stops every running relay: each relay records its own
+`aborted` result. Unstarted tasks are marked `skipped`.
 
 ## Trust
 

@@ -18,7 +18,7 @@ import { fail, parseArgs, readBrief } from "./cli.mjs";
 import { parseDuration } from "./duration.mjs";
 import { gitTouchedFiles, hardenGit, lastGitError, pinGitRepository } from "./git.mjs";
 import { applyFleetLane } from "./lane.mjs";
-import { guardExePath, IS_WIN, killChild, probeVersion, signalExitCode, spawnLaunch } from "./proc.mjs";
+import { guardExePath, killChild, probeVersion, refuseNativeWindows, signalExitCode, spawnLaunch } from "./proc.mjs";
 import { makeResultWriter, prepareRunDir, printSummary, privatizeArtifacts, readStderrTail, runArtifactPaths, runDirIntact, writeAtomic } from "./run.mjs";
 
 const RELAY_SIGNALS = ["SIGTERM", "SIGINT", "SIGHUP"];
@@ -72,13 +72,16 @@ function onRelaySignals(handler) {
 
 // See src/README.md for the adapter contract.
 export async function runRelay(a) {
+  // --help still answers; anything else on native Windows stops here, before any
+  // lane lookup or artifact.
+  const { opts, flagged } = parseArgs(process.argv.slice(2), a.flags || {}, { timeout: null, ...a.defaults });
+  refuseNativeWindows();
   guardExePath();
   hardenGit();
   const name = a.name || a.key;
   // Result identity (`tool`, `<slug>_unavailable`) can differ from the lane key.
   const slug = a.slug || a.key;
   const unavailableStatus = `${slug.replace(/-/g, "_")}_unavailable`;
-  const { opts, flagged } = parseArgs(process.argv.slice(2), a.flags || {}, { timeout: null, ...a.defaults });
   applyFleetLane(opts, flagged, a.key, { conflicts: a.laneConflicts, onDial: a.onDial });
   if (opts.timeout !== null && parseDuration(opts.timeout) === null) {
     fail(`--timeout "${opts.timeout}" is invalid or too long; use a positive h/m/s duration no longer than about 24 days`);
@@ -117,7 +120,7 @@ export async function runRelay(a) {
       finalMessage: "",
       error: `the relay was killed by ${signal} during the ${name} version preflight; ${name} was not dispatched`,
     });
-    if (probeChild) killChild(probeChild, IS_WIN ? "SIGTERM" : "SIGKILL");
+    if (probeChild) killChild(probeChild, "SIGKILL");
     process.exit(result.exitCode);
   });
   // Before dispatch: the repository every later git call is held to.
@@ -180,7 +183,7 @@ export async function runRelay(a) {
   // Last line of defence: a bug in an adapter hook must still leave a result and
   // must not orphan the implementer's process group.
   const crash = (error) => {
-    killChild(guard.child, IS_WIN ? "SIGTERM" : "SIGKILL");
+    killChild(guard.child, "SIGKILL");
     try {
       report({ status: "failed", exitCode: 1, signal: null, error: `relay internal error: ${error && error.stack ? error.stack : error}` });
     } catch {
@@ -213,7 +216,6 @@ export async function runRelay(a) {
     const probeTimeoutMs = probe.timeoutMs ?? Math.min(timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS, DEFAULT_PROBE_TIMEOUT_MS);
     const outcome = await probeVersion({ cwd: opts.cd, ...probe.launch }, probeTimeoutMs, {
       parse: probe.parse,
-      missing: probe.missing,
       onChild: (child) => { probeChild = child; guard.child = child; },
     });
     version = outcome.version;
@@ -261,17 +263,6 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
   let child;
   try {
     launch = { cwd: opts.cd, ...a.launch(opts, brief, run, state) };
-    // cmd.exe cannot start in a UNC directory: it falls back to %SystemRoot% with a
-    // warning, and the brief would run there while the report names the share.
-    if (IS_WIN && (launch.shell || /(^|[\\/])cmd\.exe$/i.test(launch.command))) {
-      if (/^\\\\[^?.\\]/.test(launch.cwd)) {
-        throw new Error(`--cd is a UNC path and ${name} launches through cmd.exe, which cannot run in one; map the share to a drive letter first`);
-      }
-      // Paths reach cmd.exe inside quotes, where %VAR% and !VAR! still expand.
-      if ([opts.cd, run.outDir].some((path) => /[\0\r\n"%!]/.test(path))) {
-        throw new Error(`${name} launches through cmd.exe, which would rewrite %, ! or a quote in --cd or --out-dir; use a path without them`);
-      }
-    }
     child = spawnLaunch(launch);
     guard.child = child;
   } catch (error) {
@@ -365,7 +356,7 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
   }
 
   // The relay's own death must still produce a result, and must take the
-  // implementer with it. SIGTERM/SIGHUP registration is a no-op on Windows.
+  // implementer with it.
   onRelaySignals((signal) => {
     if (!settle()) return;
     child.once("exit", dropPipes);
@@ -429,7 +420,7 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
     if (a.onStderr) a.onStderr(stderrDecoder.end(), state);
     // Nothing the implementer left in its process group may outlive the report: a background
     // job could write after the tripwire's last look (a process that left the group with
-    // setsid is out of reach). POSIX only; on Windows the leftovers keep running.
+    // setsid is out of reach).
     killChild(child, "SIGKILL");
     privatizeArtifacts(run);
     let judged = !watchdogFired && a.verdict ? a.verdict(state, { code, signal }) || {} : {};

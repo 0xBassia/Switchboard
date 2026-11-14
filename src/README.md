@@ -40,6 +40,10 @@ The bundler enforces these, and a violation is a build error:
 
 ## Lifecycle guarantees (owned by core, identical for every implementer)
 
+Relays run on macOS, Linux and WSL; native Windows is not supported (use WSL).
+
+- On native Windows every relay refuses to run: it prints a pointer to WSL and exits 2 before any
+  lane lookup or artifact (`--help` still answers).
 - A usage error exits 2 before any artifact exists. `--cd` and `--out-dir` are validated as
   directories.
 - Once the brief validates, `result.json` is written atomically on every outcome:
@@ -47,7 +51,7 @@ The bundler enforces these, and a violation is a build error:
   `<key>_unavailable`.
 - A missing binary exits 127. A broken one (its version probe fails or hangs) is never
   dispatched to: `failed` with the probe's exit code, or `timeout` with exit 124. Whatever the
-  probe's outcome, its process group is killed before dispatch (POSIX).
+  probe's outcome, its process group is killed before dispatch.
 - A refusal from an adapter's `prepare` (thrown; `usage: true` keeps exit 2) is still recorded as
   a `failed` result.json.
 - An `--out-dir` that is a symbolic link, or that reaches through one below `--cd`, is a usage
@@ -63,8 +67,6 @@ The bundler enforces these, and a violation is a build error:
 - `events.jsonl` and `stderr.txt` are written through descriptors opened exclusively at start, so
   an entry the implementer swaps mid-run can never redirect them; artifacts the implementer writes
   itself are made private once it has exited.
-- On Windows the relay never resolves a bare command (`git`, the implementer) in the `--cd`
-  checkout: `NoDefaultCurrentDirectoryInExePath` is set for itself and inherited by the implementer.
 - Every `git` call the relay makes runs with `core.fsmonitor` switched off (git 2.31+; the
   implementer inherits that setting), with no hooks, with every configured clean, smudge and
   process filter switched off by name (so a `.gitattributes` line added mid-run cannot start
@@ -76,8 +78,8 @@ The bundler enforces these, and a violation is a build error:
   repository when the run started.
 - The relay keeps only absolute `PATH` entries; an empty or relative entry would resolve inside the
   checkout.
-- After the implementer exits, the relay sends SIGKILL to everything left in its process group
-  (POSIX). A process that left the group is not covered; on Windows leftovers keep running.
+- After the implementer exits, the relay sends SIGKILL to everything left in its process group.
+  A process that left the group is not covered.
 - The read-only tripwire counts a commit or other ref move in any namespace (remote-tracking refs
   excepted, so a background fetch is not a write), a change to `.git/info/exclude`,
   `.git/info/attributes`, the `core.excludesFile` setting or that file's contents, or the name or
@@ -107,11 +109,11 @@ Only `key`, `versionField`, `fields` and `launch` are required.
   readOnly(opts), tripwire   true arms the tripwire (pass `tripwire` from tripwire.mjs)
   tripwireIgnore(path)  true for repo-relative paths the CLI writes as its own bookkeeping
                  even when read-only; outside the tripwire
-  version(opts)  { launch, timeoutMs?, parse?, missing? } to probe, { unavailable: true }
+  version(opts)  { launch, timeoutMs?, parse? } to probe, { unavailable: true }
                  when the adapter's own launcher lookup already failed, or null to skip
   prepare(opts, run, state, brief)  last step before launch (profiles, env); throw to
                  refuse (core records a failed result; `usage: true` keeps exit 2)
-  launch(opts, brief, run, state)   { command, args, shell?, env?, stdin? }
+  launch(opts, brief, run, state)   { command, args, env?, stdin? } (never a shell)
   scanner        makeEventScanner | makeLineScanner from scan.mjs, fed to onEvent;
                  omit it to receive decoded stdout text in onText(text, state, run)
   final(state)   the implementer's final report (written to final.txt)
@@ -135,5 +137,5 @@ Every explicitly passed flag marks its key as set, and set keys win over lane di
 common flags `--brief`, `--cd`, `--lane`, `--timeout` and `--out-dir` are built in.
 
 `src/adapters/pi.mjs` is a compact reference adapter. `src/adapters/claude.mjs` shows
-stdin briefs, a resolved launcher with cmd.exe shims, a settings profile artifact, the
+stdin briefs, a launcher resolved on PATH, a settings profile artifact, the
 tripwire, and a verdict.

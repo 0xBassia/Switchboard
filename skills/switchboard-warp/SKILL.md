@@ -9,7 +9,7 @@ description: >-
   directly without delegating, or for the interactive `warp` TUI (this skill drives the headless
   `oz agent run`, not the terminal app).
 license: MIT
-compatibility: Requires the `oz` CLI (Warp Agent CLI) installed and authenticated (`oz login`, or `WARP_API_KEY` for a headless host; Warp AI features need an eligible Warp plan or your own provider key), Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Shell examples assume bash/zsh (macOS/Linux, or Git Bash/WSL on Windows).
+compatibility: Requires the `oz` CLI (Warp Agent CLI) installed and authenticated (`oz login`, or `WARP_API_KEY` for a headless host; Warp AI features need an eligible Warp plan or your own provider key), Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). Shell examples assume bash/zsh.
 metadata:
   version: 1.1.0
 ---

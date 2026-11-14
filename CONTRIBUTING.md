@@ -16,8 +16,7 @@ Four invariants hold for every skill here, and they are the bar for a new one:
   working tree to review, it does not belong here.
 - **The relay never commits.** Committing belongs to the reviewer.
 - **Node built-ins only.** No dependencies, no network calls of its own, no credentials read or
-  written, no telemetry. The relay launches its implementer CLI and `git`, plus the platform process
-  launcher where a Windows shim or a process-tree kill needs one.
+  written, no telemetry. The relay launches its implementer CLI and `git`, never through a shell.
 - **Autonomy is stated in the CLI's own terms**, and whatever it cannot enforce is said plainly. A
   CLI with no read-only mode is mergeable; a skill that implies it has one is not.
 
@@ -103,6 +102,10 @@ relays together with the source. `node tools/build.mjs --check` (in CI) fails on
 A fix in `src/core/` reaches every relay at once, so run the whole `node test/relay-smoke.mjs`
 and `node --test test/core.test.mjs`. A new implementer is one adapter file plus its skill
 directory.
+
+Supported platforms are macOS, Linux and WSL; native Windows is not supported (use WSL). Every
+relay, the queue and the setup scripts refuse native Windows with exit 2, so do not add Windows
+code paths (shell launches, `.cmd` shims, `taskkill`) back.
 
 ## Review
 

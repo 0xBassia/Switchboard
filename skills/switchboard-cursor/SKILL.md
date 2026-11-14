@@ -8,7 +8,7 @@ description: >-
   through Cursor while staying the reviewer. DO NOT USE for tasks small enough to do inline, or when
   the user wants the code written directly without delegating.
 license: MIT
-compatibility: Requires the `cursor-agent` CLI installed and authenticated, Node 18+, and git 2.31+. The optional `--add-dir` flag requires cursor-agent 2026.07.23 or newer. The orchestrating agent must be able to run shell commands and read files. Shell examples assume bash/zsh (macOS/Linux, or Git Bash/WSL on Windows).
+compatibility: Requires the `cursor-agent` CLI installed and authenticated, Node 18+, and git 2.31+. The optional `--add-dir` flag requires cursor-agent 2026.07.23 or newer. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). Shell examples assume bash/zsh.
 metadata:
   version: 1.1.0
 ---
@@ -89,12 +89,6 @@ result; a missing `cursor-agent` exits 127 and writes `status: "cursor_agent_una
 Trust process state and the working tree over a progress display. Completion means the process exited
 and `result.json` exists. Cursor's full report is the `finalMessage` field in `result.json` (also
 printed in full on stdout between the report markers).
-
-**Windows + hooks caveat:** if the user has Cursor hooks configured (`~/.cursor/hooks.json`, or
-Claude Code `PreToolUse` hooks, which cursor-agent imports), dispatching from a Git Bash (MSYS)
-console makes cursor-agent feed PowerShell-syntax hook wrappers to bash, so every command Cursor
-tries to run is blocked — edits still land, gates do not run. Dispatch from a PowerShell or cmd
-console instead. Details: [references/dispatch-and-poll.md](references/dispatch-and-poll.md).
 
 ### 4. Review — do not trust the self-report
 

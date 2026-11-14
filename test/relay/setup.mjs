@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 
 // ---- switchboard-setup: discover + fleet (fleet lanes) ----
 export function runSetup(h) {
@@ -34,32 +34,30 @@ export function runSetup(h) {
         [...h.SKILLS].sort().join(","),
   );
 
-  if (!h.WIN) {
-    // An empty PATH component is the current directory in POSIX lookup. The
-    // relays drop such entries so a checkout can never supply a CLI, and
-    // discovery must agree: a binary only the current directory holds is missing.
-    const cwdProbe = join(h.scratch, "discover-cwd");
-    mkdirSync(cwdProbe);
-    writeFileSync(
-      join(cwdProbe, "codex"),
-      '#!/bin/sh\ncase "$1" in --version) echo "9.9.9"; exit 0;; esac\nexit 0\n',
+  // An empty PATH component is the current directory in POSIX lookup. The
+  // relays drop such entries so a checkout can never supply a CLI, and
+  // discovery must agree: a binary only the current directory holds is missing.
+  const cwdProbe = join(h.scratch, "discover-cwd");
+  mkdirSync(cwdProbe);
+  writeFileSync(
+    join(cwdProbe, "codex"),
+    '#!/bin/sh\ncase "$1" in --version) echo "9.9.9"; exit 0;; esac\nexit 0\n',
+  );
+  chmodSync(join(cwdProbe, "codex"), 0o755);
+  for (const [label, pathValue] of [
+    ["an empty PATH component", ":"],
+    ["a set-but-empty PATH", ""],
+  ]) {
+    const cwdDiscover = spawnSync(process.execPath, [join(setupDir, "discover.mjs")], {
+      encoding: "utf8",
+      cwd: cwdProbe,
+      env: { ...process.env, PATH: pathValue },
+    });
+    const cwdReport = cwdDiscover.status === 0 ? JSON.parse(cwdDiscover.stdout) : null;
+    h.check(
+      `discover ignores ${label} (the current directory never supplies a CLI)`,
+      cwdReport !== null && !cwdReport.discovered.some((d) => d.key === "codex"),
     );
-    chmodSync(join(cwdProbe, "codex"), 0o755);
-    for (const [label, pathValue] of [
-      ["an empty PATH component", delimiter],
-      ["a set-but-empty PATH", ""],
-    ]) {
-      const cwdDiscover = spawnSync(process.execPath, [join(setupDir, "discover.mjs")], {
-        encoding: "utf8",
-        cwd: cwdProbe,
-        env: { ...process.env, PATH: pathValue },
-      });
-      const cwdReport = cwdDiscover.status === 0 ? JSON.parse(cwdDiscover.stdout) : null;
-      h.check(
-        `discover ignores ${label} (the current directory never supplies a CLI)`,
-        cwdReport !== null && !cwdReport.discovered.some((d) => d.key === "codex"),
-      );
-    }
   }
 
   // Keep fixtures inside the repo tree so sandboxed CI/dev runs can write; seed a
@@ -78,12 +76,10 @@ export function runSetup(h) {
     join(cfgRepo, ".git", "config"),
     "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n",
   );
-  // Node's os.homedir() uses HOME on POSIX and USERPROFILE on Windows.
+  // Node's os.homedir() uses HOME.
   const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
   const prevXdg = process.env.XDG_CONFIG_HOME;
   process.env.HOME = cfgHome;
-  process.env.USERPROFILE = cfgHome;
   delete process.env.XDG_CONFIG_HOME;
 
   try {
@@ -297,7 +293,7 @@ export function runSetup(h) {
       );
       h.check(`config validate accepts opencode catalog model id (${shape})`, acceptCatalogModel.status === 0);
     }
-    // '@' and '~' must not open the door to cmd.exe metacharacters ('&', '%') riding alongside them.
+    // '@' and '~' must not open the door to shell metacharacters ('&', '%') riding alongside them.
     for (const [index, model] of ["x/@cf & whoami", "x/~%PATH%"].entries()) {
       const badOpenCodeModel = {
         version: "switchboard-fleet.v1",
@@ -477,7 +473,7 @@ export function runSetup(h) {
     const laneArgsFile = join(cfgRepo, "args-lane-opencode.json");
     mkdirSync(laneOut, { recursive: true });
     // h.baseEnv snapped process.env before this block cleared XDG_CONFIG_HOME — drop it again.
-    const fleetEnv = { ...h.baseEnv, HOME: cfgHome, USERPROFILE: cfgHome };
+    const fleetEnv = { ...h.baseEnv, HOME: cfgHome };
     delete fleetEnv.XDG_CONFIG_HOME;
 
     // Explicit Claude full-access must win over a readOnly lane (flags win).
@@ -738,7 +734,7 @@ export function runSetup(h) {
           !existsSync(join(escapeOutside, "config.json")),
       );
     } catch (error) {
-      h.check(`config write symlink guard runnable (${error.code || error.message})`, process.platform === "win32");
+      h.check(`config write symlink guard runnable (${error.code || error.message})`, false);
     }
 
     const load = spawnSync(
@@ -807,7 +803,7 @@ export function runSetup(h) {
       "lane resolve: an approved project lane resolves from a linked worktree",
       added.status === 0 && fromWorktree.status === 0 && /"effort":\s*"high"/.test(fromWorktree.stdout),
     );
-    // Windows Git (core.autocrlf) checks the approved file out with CRLF: same content, still trusted.
+    // Git with core.autocrlf can check the approved file out with CRLF: same content, still trusted.
     const linkedConfig = join(linked, ".switchboard", "config.json");
     writeFileSync(linkedConfig, readFileSync(linkedConfig, "utf8").replace(/\r?\n/g, "\r\n"));
     const fromCrlf = spawnSync(
@@ -849,22 +845,20 @@ export function runSetup(h) {
       resolveMissingBad.status === 2 && /project fleet config ignored/.test(resolveMissingBad.stderr),
     );
     writeFileSync(join(cfgRepo, ".switchboard", "config.json"), savedProject);
-    if (process.platform !== "win32") {
-      // An untrusted repository's config that is a link (to /dev/zero, or to a file
-      // outside the repository) is refused at once, never read.
-      rmSync(join(cfgRepo, ".switchboard", "config.json"));
-      symlinkSync("/dev/zero", join(cfgRepo, ".switchboard", "config.json"));
-      const started = Date.now();
-      const loadLink = spawnSync(process.execPath, [join(setupDir, "config.mjs"), "load", "--cwd", cfgRepo],
-        { encoding: "utf8", env: process.env, timeout: 20_000 });
-      let linkEff = null;
-      try { linkEff = JSON.parse(loadLink.stdout); } catch { linkEff = null; }
-      h.check("config load: a project config that is a symlink is refused quickly, not read",
-        loadLink.status === 0 && Date.now() - started < 10_000 && /not a regular file/.test(linkEff?.projectError ?? "") &&
-          linkEff?.lanes?.tests?.source === "global");
-      rmSync(join(cfgRepo, ".switchboard", "config.json"));
-      writeFileSync(join(cfgRepo, ".switchboard", "config.json"), savedProject);
-    }
+    // An untrusted repository's config that is a link (to /dev/zero, or to a file
+    // outside the repository) is refused at once, never read.
+    rmSync(join(cfgRepo, ".switchboard", "config.json"));
+    symlinkSync("/dev/zero", join(cfgRepo, ".switchboard", "config.json"));
+    const started = Date.now();
+    const loadLink = spawnSync(process.execPath, [join(setupDir, "config.mjs"), "load", "--cwd", cfgRepo],
+      { encoding: "utf8", env: process.env, timeout: 20_000 });
+    let linkEff = null;
+    try { linkEff = JSON.parse(loadLink.stdout); } catch { linkEff = null; }
+    h.check("config load: a project config that is a symlink is refused quickly, not read",
+      loadLink.status === 0 && Date.now() - started < 10_000 && /not a regular file/.test(linkEff?.projectError ?? "") &&
+        linkEff?.lanes?.tests?.source === "global");
+    rmSync(join(cfgRepo, ".switchboard", "config.json"));
+    writeFileSync(join(cfgRepo, ".switchboard", "config.json"), savedProject);
 
     writeFileSync(
       join(cfgRepo, ".switchboard", "config.json"),
@@ -882,8 +876,6 @@ export function runSetup(h) {
   } finally {
     if (prevHome === undefined) delete process.env.HOME;
     else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
     if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
     else process.env.XDG_CONFIG_HOME = prevXdg;
     rmSync(fleetRoot, { recursive: true, force: true });

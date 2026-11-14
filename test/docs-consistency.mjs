@@ -257,6 +257,11 @@ const CANONICAL = [
     text: "For independent tasks, the `switchboard-queue` skill dispatches several briefs in parallel, each in its own git worktree, and gives you one report to review. Dependent steps still run in order with this skill alone, as above.",
   },
   {
+    why: "supported platforms (native Windows is refused at runtime)",
+    file: "SKILL.md",
+    text: "Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).",
+  },
+  {
     why: "parallel batches example task",
     file: "references/multi-task-queues.md",
     text: 'A queue task that targets {CLI}: ```json {"id": "example-task", "brief": "briefs/example-task.md", "implementer": "{KEY}"} ```',

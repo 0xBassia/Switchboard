@@ -184,29 +184,27 @@ for (const [mode, expectedStatus, expectedExit] of [
     value.error?.includes("version preflight") &&
     value.error?.includes("was not dispatched"));
 }
-if (!h.WIN) {
-  const outDir = join(h.scratch, "out-abort-preflight-cursor");
-  const preflight = h.runRelay("cursor", h.freshRepo("work-abort-preflight-cursor"), outDir, ["--timeout", "1s"], {
-    SMOKE_MODE: "cursor-version-hang",
+const outDir = join(h.scratch, "out-abort-preflight-cursor");
+const preflight = h.runRelay("cursor", h.freshRepo("work-abort-preflight-cursor"), outDir, ["--timeout", "1s"], {
+  SMOKE_MODE: "cursor-version-hang",
+});
+h.check("cursor preflight abort: run artifacts are prepared",
+  await h.until(() => existsSync(join(outDir, "events.jsonl")), 2000));
+preflight.kill("SIGTERM");
+const exited = await new Promise((resolve) => {
+  const timer = setTimeout(() => resolve(false), 5000);
+  preflight.on("close", () => {
+    clearTimeout(timer);
+    resolve(true);
   });
-  h.check("cursor preflight abort: run artifacts are prepared",
-    await h.until(() => existsSync(join(outDir, "events.jsonl")), 2000));
-  preflight.kill("SIGTERM");
-  const exited = await new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(false), 5000);
-    preflight.on("close", () => {
-      clearTimeout(timer);
-      resolve(true);
-    });
-  });
-  const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
-  h.check("cursor preflight abort: result is aborted and dispatch never starts",
-    exited &&
-    value.status === "aborted" &&
-    value.signal === "SIGTERM" &&
-    value.error?.includes("version preflight") &&
-    value.error?.includes("was not dispatched"));
-}
+});
+const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
+h.check("cursor preflight abort: result is aborted and dispatch never starts",
+  exited &&
+  value.status === "aborted" &&
+  value.signal === "SIGTERM" &&
+  value.error?.includes("version preflight") &&
+  value.error?.includes("was not dispatched"));
 {
   const outDir = join(h.scratch, "out-unavailable-cursor");
   mkdirSync(outDir);
@@ -253,14 +251,12 @@ if (!h.WIN) {
   const steady = stallRun("steady", "cursor-steady");
   h.check("cursor stall: a steadily streaming run longer than --stall-timeout completes",
     steady.run.status === 0 && steady.value.status === "completed");
-  if (!h.WIN) {
-    const wallClock = stallRun("wall-clock-first", "cursor-delayed-shutdown", ["--stall-timeout", "2s"], "1s");
-    h.check("cursor stall: a wall-clock timeout keeps its cause during delayed shutdown",
-      wallClock.run.status === 1 && wallClock.value.status === "timeout" &&
-      wallClock.value.exitCode === 1 && wallClock.value.signal === null &&
-      wallClock.value.error?.includes("--timeout 1s") &&
-      !wallClock.value.error?.includes("--stall-timeout") && wallClock.elapsed >= 3000);
-  }
+  const wallClock = stallRun("wall-clock-first", "cursor-delayed-shutdown", ["--stall-timeout", "2s"], "1s");
+  h.check("cursor stall: a wall-clock timeout keeps its cause during delayed shutdown",
+    wallClock.run.status === 1 && wallClock.value.status === "timeout" &&
+    wallClock.value.exitCode === 1 && wallClock.value.signal === null &&
+    wallClock.value.error?.includes("--timeout 1s") &&
+    !wallClock.value.error?.includes("--stall-timeout") && wallClock.elapsed >= 3000);
   const off = stallRun("stall-off", "cursor-steady", []);
   h.check("cursor stall: --stall-timeout is opt-in (stallTimeout null by default)",
     off.value.status === "completed" && off.value.stallTimeout === null);

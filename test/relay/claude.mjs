@@ -54,7 +54,7 @@ export async function runClaude(h) {
       !capture.args.includes("--bg") &&
       !capture.args.includes("--bare"));
     h.check("claude success: normal tool surface selected",
-      h.pair(capture.args, "--tools", `Read,Glob,Grep,Edit,Write,${h.WIN ? "PowerShell" : "Bash"}`));
+      h.pair(capture.args, "--tools", "Read,Glob,Grep,Edit,Write,Bash"));
     h.check("claude success: all MCP tools disallowed",
       h.pair(capture.args, "--disallowedTools", "mcp__*"));
     h.check("claude success: generated profile selected",
@@ -71,7 +71,7 @@ export async function runClaude(h) {
     if (settingsPath && existsSync(settingsPath)) {
       baselineProfile = readFileSync(settingsPath, "utf8");
       const profile = JSON.parse(readFileSync(settingsPath, "utf8"));
-      const shell = h.WIN ? "PowerShell" : "Bash";
+      const shell = "Bash";
       const expectedDeny = [
         `${shell}(git commit *)`,
         `${shell}(git * commit *)`,
@@ -86,18 +86,11 @@ export async function runClaude(h) {
         profile.disableClaudeAiConnectors === true);
       h.check("claude success: deny rules match the write profile",
         JSON.stringify(profile.permissions?.deny) === JSON.stringify(expectedDeny));
-      if (h.WIN) {
-        h.check("claude success: native Windows profile omits the sandbox",
-          !Object.prototype.hasOwnProperty.call(profile, "sandbox"));
-        h.check("claude success: native Windows profile enables PowerShell",
-          profile.env?.CLAUDE_CODE_USE_POWERSHELL_TOOL === "1");
-      } else {
-        h.check("claude success: POSIX sandbox is strict",
-          profile.sandbox?.enabled === true &&
-          profile.sandbox?.failIfUnavailable === true &&
-          profile.sandbox?.autoAllowBashIfSandboxed === true &&
-          profile.sandbox?.allowUnsandboxedCommands === false);
-      }
+      h.check("claude success: sandbox is strict",
+        profile.sandbox?.enabled === true &&
+        profile.sandbox?.failIfUnavailable === true &&
+        profile.sandbox?.autoAllowBashIfSandboxed === true &&
+        profile.sandbox?.allowUnsandboxedCommands === false);
     }
     h.check("claude success: omitted autocompact stays absent from argv",
       !capture.args.includes("--autocompact"));
@@ -243,7 +236,7 @@ for (const scenario of [
     h.check(`claude read-only ${scenario.name}: read-only tools selected`,
       h.pair(capture.args, "--tools", "Read,Glob,Grep"));
     h.check(`claude read-only ${scenario.name}: write and shell tools omitted`,
-      !["Edit", "Write", "Bash", "PowerShell"].some((tool) => tools.split(",").includes(tool)));
+      !["Edit", "Write", "Bash"].some((tool) => tools.split(",").includes(tool)));
   }
   if (exitCode !== 0) console.error(`claude read-only ${scenario.name} relay stderr:\n${stderr}`);
 }

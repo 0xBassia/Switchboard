@@ -9,10 +9,9 @@
  *
  * Trust posture: relay.mjs itself makes no network calls, reads or writes no
  * credentials, and sends no telemetry; it has no dependencies (Node built-ins
- * only). It shells out only to `pi` and `git`, plus the platform
- * process-termination utility when a Windows process-tree kill requires one.
- * The `pi` process it launches does authenticate — exactly as you do at the
- * terminal. Read this file before you run it.
+ * only). It shells out only to `pi` and `git`. The `pi` process it launches
+ * does authenticate — exactly as you do at the terminal. Read this file before
+ * you run it.
  *
  * The brief is piped to pi on stdin, so it never appears in the host process
  * list and no argv size cap applies. Keep secrets out of the brief anyway on
@@ -29,9 +28,8 @@
  * explicitly trusts project `.pi` resources. The diff reported in
  * `touchedFiles` is the record of what changed.
  *
- * pi is installed from npm, so on native Windows `pi` is a `.cmd` shim this
- * relay launches with shell:true. Only token-validated flag values ride argv
- * (the brief never does), which keeps that launch safe.
+ * The relay never launches pi through a shell. Only token-validated flag values
+ * ride argv (the brief never does).
  *
  * Usage:
  *   node relay.mjs --brief <file> [options]
@@ -73,25 +71,15 @@
  * was killed and forwarded the kill to pi), or pi_unavailable.
  */
 
-import { join } from "node:path";
 import { exclusive, fail } from "../core/cli.mjs";
-import { IS_WIN } from "../core/proc.mjs";
 import { runRelay } from "../core/relay.mjs";
 import { makeEventScanner } from "../core/scan.mjs";
 import { tripwire } from "../core/tripwire.mjs";
 
 const READ_ONLY_TOOLS = "read,grep,find,ls";
-// --model, --provider, and --session values reach a shell on win32 (shell:true for the
-// .cmd shim), so they are restricted to safe tokens.
+// --model, --provider, and --session values ride argv, so they are restricted to safe
+// tokens that cannot pass for a flag.
 const SAFE_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
-
-// shell:true resolves pi.cmd, but a missing command is only a non-zero exit from
-// cmd.exe. Ask the in-box where.exe first and exit 9009 (cmd's own "not found" code)
-// so absence stays pi_unavailable.
-function windowsProbe() {
-  const where = join(process.env.SystemRoot || process.env.WINDIR || "C:\\Windows", "System32", "where.exe");
-  return `("${where}" pi >nul 2>&1 || exit /b 9009) && pi --version`;
-}
 
 const pi = {
   key: "pi",
@@ -127,15 +115,11 @@ const pi = {
     usage: state.usage,
     stopReason: state.stopReason,
   }),
-  // On Windows, npm installs `pi` as a .cmd shim, which needs shell:true to resolve.
-  version: () => ({
-    launch: IS_WIN ? { command: windowsProbe(), args: [], shell: true } : { command: "pi", args: ["--version"] },
-    missing: (code) => IS_WIN && code === 9009,
-  }),
+  version: () => ({ launch: { command: "pi", args: ["--version"] } }),
   binary: "pi",
   // The brief rides stdin, never argv. --mode json alone is non-interactive: pi reads
   // the piped brief, streams events, and exits. Only fixed flags and token-validated
-  // values ride argv, so shell:true on win32 is safe.
+  // values ride argv, and no shell runs.
   launch(opts, brief) {
     const args = ["--mode", "json"];
     if (opts.provider) args.push("--provider", opts.provider);
@@ -144,7 +128,7 @@ const pi = {
     else if (opts.resumeLast) args.push("--continue");
     args.push(opts.approve ? "--approve" : "--no-approve");
     if (opts.readOnly) args.push("--tools", READ_ONLY_TOOLS);
-    return { command: "pi", args, shell: IS_WIN, stdin: brief };
+    return { command: "pi", args, stdin: brief };
   },
   scanner: makeEventScanner,
   onEvent(event, state) {

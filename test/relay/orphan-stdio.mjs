@@ -35,8 +35,8 @@ for (const skill of h.SKILLS) {
 // fires, sets watchdogFired, and close reports timeout for a run that already succeeded.
 // The exit delay counts from the implementer's own start, so it lands at delay + process
 // startup on the relay's clock. Exiting 500 ms before the deadline keeps the exit inside
-// that window for any startup under 500 ms; a shell-launched .cmd shim on a loaded Windows
-// runner can take well over the 200 ms a 1s/800ms split allowed.
+// that window for any startup under 500 ms; a loaded CI runner can take well over the
+// 200 ms a 1s/800ms split allowed.
 for (const skill of h.SKILLS) {
   const outDir = join(h.scratch, `out-orphan-watchdog-${skill}`);
   const grandPidFile = join(h.scratch, `grandpid-orphan-watchdog-${skill}`);
@@ -56,13 +56,7 @@ for (const skill of h.SKILLS) {
     });
   const result = existsSync(join(outDir, "result.json")) ? h.result(outDir) : null;
   h.check(`${skill} orphan-near-timeout: the relay exits`, run.signal === null);
-  if (h.WIN) {
-    // A .cmd shim's startup on Windows runners can outlast the 500 ms margin, so a genuine
-    // timeout is possible. The no-relabel logic is platform-independent and asserted on POSIX;
-    // here require only that the relay exits and records a terminal result.
-    h.check(`${skill} orphan-near-timeout: the relay records a result (got ${result?.status})`,
-      result != null && ["completed", "failed", "timeout"].includes(result.status));
-  } else if (skill === "claude") {
+  if (skill === "claude") {
     // This relay treats a missing result event as failed even on a 0 child exit.
     h.check(`${skill} orphan-near-timeout: the watchdog does not relabel the run as timeout (got ${result?.status})`,
       result != null && result.status !== "timeout");
