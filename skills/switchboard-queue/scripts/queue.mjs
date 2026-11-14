@@ -514,7 +514,8 @@ function runRelay(task, target, cwd, attemptDir, running) {
 // hard terminate that would orphan the implementer), so fell the whole tree.
 function stopRelay(child) {
   if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
+    // By full path: PATH never supplies it.
+    spawnSync(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
     return;
   }
   try { child.kill("SIGTERM"); } catch { /* already gone */ }

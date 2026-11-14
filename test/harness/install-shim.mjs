@@ -62,7 +62,10 @@ export function installShim(h, { isolatePath = false } = {}) {
     h.check("isolated PATH: git resolves on the host", Boolean(git));
     if (WIN) {
       // Windows executables load sibling DLLs, so expose whole directories rather than links.
-      const dirs = [pathDirname(process.execPath), git && pathDirname(git)].filter(Boolean);
+      // System32 stays: the relays and the queue stop process trees with taskkill, and
+      // without it every timeout and abort test leaves its children running.
+      const system32 = join(process.env.SystemRoot || "C:\\Windows", "System32");
+      const dirs = [pathDirname(process.execPath), git && pathDirname(git), system32].filter(Boolean);
       pathValue = [shimDir, ...new Set(dirs)].join(delimiter);
     } else {
       const toolDir = join(h.scratch, "tools");

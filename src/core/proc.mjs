@@ -3,7 +3,7 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { constants } from "node:os";
-import { isAbsolute } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 export const IS_WIN = process.platform === "win32";
 
@@ -33,7 +33,8 @@ export function killChild(child, signal = "SIGTERM") {
     if (signal !== "SIGTERM") return;
     guardExePath();
     try {
-      execFileSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+      // By full path: PATH (even with only absolute entries) never supplies it.
+      execFileSync(join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(child.pid), "/t", "/f"], {
         stdio: ["ignore", "ignore", "inherit"],
       });
     } catch {
