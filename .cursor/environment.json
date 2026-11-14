@@ -1,0 +1,4 @@
+{
+  "name": "switchboard",
+  "install": "bash .cursor/install.sh"
+}

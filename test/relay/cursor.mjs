@@ -1,0 +1,272 @@
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+export async function runCursor(h) {
+{
+  const outDir = join(h.scratch, "out-success-cursor");
+  const workDir = h.freshRepo("work success cursor");
+  const addDir = h.freshRepo("extra success cursor");
+  const captureFile = join(h.scratch, "capture-success-cursor.json");
+  const run = spawnSync(process.execPath, [
+    h.relayPath("cursor"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", outDir,
+    "--session", "cursor-session-0",
+    "--model", "claude-opus-4-8[context=1m,effort=high,fast=false]",
+    "--add-dir", addDir,
+    "--no-force",
+  ], {
+    env: { ...h.baseEnv, SMOKE_MODE: "cursor-success", SMOKE_CAPTURE_FILE: captureFile },
+    encoding: "utf8",
+  });
+  const capture = existsSync(captureFile)
+    ? JSON.parse(readFileSync(captureFile, "utf8"))
+    : { args: [], brief: "" };
+  h.check("cursor success: relay exits zero", run.status === 0);
+  h.check("cursor success: session, model, add-dir, and no-force argv are exact",
+    JSON.stringify(capture.args) === JSON.stringify([
+      "--print", "--output-format", "stream-json", "--trust",
+      "--model", "claude-opus-4-8[context=1m,effort=high,fast=false]",
+      "--resume", "cursor-session-0",
+      "--add-dir", addDir,
+    ]));
+  h.check("cursor success: brief travels on stdin", capture.brief === "smoke brief: run until killed.");
+  h.check("cursor success: result preserves session, model, permission, usage, and final report",
+    existsSync(join(outDir, "result.json")) &&
+    h.result(outDir).status === "completed" &&
+    h.result(outDir).force === false &&
+    h.result(outDir).sandbox === null &&
+    h.result(outDir).sessionId === "cursor-session-1" &&
+    h.result(outDir).resolvedModel === "claude-opus-4-8[context=1m,effort=high,fast=false]" &&
+    h.result(outDir).permissionMode === "default" &&
+    h.result(outDir).usage?.inputTokens === 11 &&
+    h.result(outDir).usage?.outputTokens === 4 &&
+    h.result(outDir).finalMessage === "fake cursor completed");
+}
+{
+  const outDir = join(h.scratch, "out-read-only-cursor");
+  const workDir = h.freshRepo("work-read-only-cursor");
+  const captureFile = join(h.scratch, "capture-read-only-cursor.json");
+  const run = spawnSync(process.execPath, [
+    h.relayPath("cursor"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", outDir,
+    "--read-only",
+    "--sandbox", "enabled",
+    "--resume-last",
+  ], {
+    env: { ...h.baseEnv, SMOKE_MODE: "cursor-success", SMOKE_CAPTURE_FILE: captureFile },
+    encoding: "utf8",
+  });
+  const capture = existsSync(captureFile)
+    ? JSON.parse(readFileSync(captureFile, "utf8"))
+    : { args: [] };
+  const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
+  h.check("cursor read-only: plan mode resumes latest without force",
+    run.status === 0 &&
+    JSON.stringify(capture.args) === JSON.stringify([
+      "--print", "--output-format", "stream-json", "--trust",
+      "--mode", "plan",
+      "--sandbox", "enabled",
+      "--continue",
+    ]) &&
+    value.readOnly === true &&
+    value.force === false &&
+    value.sandbox === "enabled" &&
+    value.permissionMode === "plan");
+  h.check("cursor read-only: tripwire is armed and a clean run is not a violation",
+    value.readOnlyViolation === false);
+}
+{
+  // Read-only tripwire: clean run, simulated write, and a write-capable run.
+  const runTrip = (name, args, env) => {
+    const outDir = join(h.scratch, `out-tripwire-${name}-cursor`);
+    const run = spawnSync(process.execPath, [
+      h.relayPath("cursor"), "--brief", h.briefPath, "--cd", h.freshRepo(`work-tripwire-${name}-cursor`),
+      "--out-dir", outDir, ...args,
+    ], { env: { ...h.baseEnv, SMOKE_MODE: "cursor-success", SMOKE_ARGS_FILE: join(h.scratch, `args-tripwire-${name}-cursor`), SMOKE_CAPTURE_FILE: join(h.scratch, `capture-tripwire-${name}-cursor`), ...env }, encoding: "utf8" });
+    return { run, value: existsSync(join(outDir, "result.json")) ? h.result(outDir) : {} };
+  };
+  const clean = runTrip("clean", ["--read-only"], {});
+  h.check("cursor tripwire: clean read-only run is not a violation",
+    clean.run.status === 0 && clean.value.readOnlyViolation === false);
+  const dirty = runTrip("write", ["--read-only"], { SMOKE_WRITE_FILE: "sneaky.txt" });
+  h.check("cursor tripwire: a write during a read-only run is a violation",
+    dirty.value.readOnlyViolation === true);
+  const normal = runTrip("normal", [], {});
+  h.check("cursor tripwire: a write-capable run carries no violation",
+    normal.run.status === 0 && (normal.value.readOnlyViolation ?? null) === null);
+}
+{
+  // Usage: the result event's counts reach normalized tokens.
+  const outDir = join(h.scratch, "out-tokens-cursor");
+  spawnSync(process.execPath, [h.relayPath("cursor"), "--brief", h.briefPath, "--cd", h.freshRepo("work-tokens-cursor"), "--out-dir", outDir],
+    { env: { ...h.baseEnv, SMOKE_MODE: "cursor-success", SMOKE_CAPTURE_FILE: join(h.scratch, "capture-tokens-cursor.json") }, encoding: "utf8" });
+  const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
+  h.check("cursor tokens: usage maps to input and output", value.tokens?.input === 11 && value.tokens?.output === 4);
+}
+{
+  const outDir = join(h.scratch, "out-sandbox-disabled-cursor");
+  const workDir = h.freshRepo("work-sandbox-disabled-cursor");
+  const captureFile = join(h.scratch, "capture-sandbox-disabled-cursor.json");
+  const run = spawnSync(process.execPath, [
+    h.relayPath("cursor"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", outDir,
+    "--sandbox", "disabled",
+  ], {
+    env: { ...h.baseEnv, SMOKE_MODE: "cursor-success", SMOKE_CAPTURE_FILE: captureFile },
+    encoding: "utf8",
+  });
+  const capture = existsSync(captureFile)
+    ? JSON.parse(readFileSync(captureFile, "utf8"))
+    : { args: [] };
+  h.check("cursor sandbox: disabled is forwarded on a fresh run and recorded",
+    run.status === 0 &&
+    JSON.stringify(capture.args) === JSON.stringify([
+      "--print", "--output-format", "stream-json", "--trust",
+      "--force",
+      "--sandbox", "disabled",
+    ]) &&
+    h.result(outDir).sandbox === "disabled");
+}
+const cursorNegativeWorkDir = h.freshRepo("work-negative-cursor");
+for (const [flag, bad] of [
+  ["--session", ""],
+  ["--session", "--continue"],
+  ["--session", "session & whoami"],
+  ["--model", ""],
+  ["--model", "--help"],
+  ["--model", "model & whoami"],
+  ["--sandbox", ""],
+  ["--sandbox", "off"],
+]) {
+  const rejected = spawnSync(process.execPath, [
+    h.relayPath("cursor"),
+    "--brief", h.briefPath,
+    "--cd", cursorNegativeWorkDir,
+    flag, bad,
+  ], { env: h.baseEnv, encoding: "utf8", timeout: 5000 });
+  h.check(`cursor validation: unsafe ${flag} value is rejected`, rejected.status === 2);
+}
+{
+  const rejected = spawnSync(process.execPath, [
+    h.relayPath("cursor"),
+    "--brief", h.briefPath,
+    "--cd", cursorNegativeWorkDir,
+    "--sandbox",
+  ], { env: { ...h.baseEnv, SMOKE_MODE: "cursor-version-hang" }, encoding: "utf8", timeout: 5000 });
+  h.check("cursor validation: missing --sandbox value is rejected before preflight",
+    rejected.status === 2 && rejected.stderr.includes("--sandbox requires a value"));
+}
+for (const [mode, expectedStatus, expectedExit] of [
+  ["cursor-version-hang", "timeout", 124],
+  ["cursor-version-fail", "failed", 7],
+]) {
+  const outDir = join(h.scratch, `out-${mode}`);
+  const preflight = spawnSync(process.execPath, [
+    h.relayPath("cursor"),
+    "--brief", h.briefPath,
+    "--cd", cursorNegativeWorkDir,
+    "--out-dir", outDir,
+    "--timeout", "1s",
+    "--sandbox", "enabled",
+  ], { env: { ...h.baseEnv, SMOKE_MODE: mode }, encoding: "utf8", timeout: 5000 });
+  const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
+  h.check(`cursor preflight: ${mode} is explicit and prevents dispatch`,
+    preflight.status === expectedExit &&
+    value.status === expectedStatus &&
+    value.sandbox === "enabled" &&
+    value.error?.includes("version preflight") &&
+    value.error?.includes("was not dispatched"));
+}
+if (!h.WIN) {
+  const outDir = join(h.scratch, "out-abort-preflight-cursor");
+  const preflight = h.runRelay("cursor", h.freshRepo("work-abort-preflight-cursor"), outDir, ["--timeout", "1s"], {
+    SMOKE_MODE: "cursor-version-hang",
+  });
+  h.check("cursor preflight abort: run artifacts are prepared",
+    await h.until(() => existsSync(join(outDir, "events.jsonl")), 2000));
+  preflight.kill("SIGTERM");
+  const exited = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 5000);
+    preflight.on("close", () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+  const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
+  h.check("cursor preflight abort: result is aborted and dispatch never starts",
+    exited &&
+    value.status === "aborted" &&
+    value.signal === "SIGTERM" &&
+    value.error?.includes("version preflight") &&
+    value.error?.includes("was not dispatched"));
+}
+{
+  const outDir = join(h.scratch, "out-unavailable-cursor");
+  mkdirSync(outDir);
+  writeFileSync(join(outDir, "result.json"), "{\"status\":\"stale\"}\n");
+  writeFileSync(join(outDir, "final.txt"), "stale final\n");
+  const missing = spawnSync(process.execPath, [
+    h.relayPath("cursor"),
+    "--brief", h.briefPath,
+    "--cd", cursorNegativeWorkDir,
+    "--out-dir", outDir,
+  ], { env: { ...process.env, PATH: "" }, encoding: "utf8" });
+  h.check("cursor unavailable: structured result replaces stale artifacts",
+    missing.status === 127 &&
+    h.result(outDir).status === "cursor_agent_unavailable" &&
+    !existsSync(join(outDir, "final.txt")));
+}
+{
+  // --stall-timeout: a live-but-silent cursor-agent is killed early and reported "stalled";
+  // a long in-flight tool call and a steadily streaming turn must not trip it.
+  const stallRun = (name, mode, extra = ["--stall-timeout", "1s"], timeout = "60s") => {
+    const outDir = join(h.scratch, `out-${name}-cursor`);
+    const started = Date.now();
+    const run = spawnSync(process.execPath, [
+      h.relayPath("cursor"),
+      "--brief", h.briefPath,
+      "--cd", h.freshRepo(`work-${name}-cursor`),
+      "--out-dir", outDir,
+      "--timeout", timeout,
+      ...extra,
+    ], { env: { ...h.baseEnv, SMOKE_MODE: mode }, encoding: "utf8", timeout: 30_000 });
+    return { run, elapsed: Date.now() - started, value: existsSync(join(outDir, "result.json")) ? h.result(outDir) : {} };
+  };
+  const stall = stallRun("stall", "cursor-stall");
+  h.check("cursor stall: silent live run is killed well before --timeout and reported stalled",
+    stall.value.status === "stalled" &&
+    stall.run.status !== 0 &&
+    stall.elapsed < 20_000 &&
+    stall.value.stallTimeout === "1s" &&
+    stall.value.error?.includes("--stall-timeout 1s") &&
+    stall.value.sessionId === "cursor-stall-session");
+  const tool = stallRun("slow-tool", "cursor-slow-tool");
+  h.check("cursor stall: an in-flight tool call longer than --stall-timeout completes",
+    tool.run.status === 0 && tool.value.status === "completed" && tool.value.finalMessage === "fake cursor finished");
+  const steady = stallRun("steady", "cursor-steady");
+  h.check("cursor stall: a steadily streaming run longer than --stall-timeout completes",
+    steady.run.status === 0 && steady.value.status === "completed");
+  if (!h.WIN) {
+    const wallClock = stallRun("wall-clock-first", "cursor-delayed-shutdown", ["--stall-timeout", "2s"], "1s");
+    h.check("cursor stall: a wall-clock timeout keeps its cause during delayed shutdown",
+      wallClock.run.status === 1 && wallClock.value.status === "timeout" &&
+      wallClock.value.exitCode === 1 && wallClock.value.signal === null &&
+      wallClock.value.error?.includes("--timeout 1s") &&
+      !wallClock.value.error?.includes("--stall-timeout") && wallClock.elapsed >= 3000);
+  }
+  const off = stallRun("stall-off", "cursor-steady", []);
+  h.check("cursor stall: --stall-timeout is opt-in (stallTimeout null by default)",
+    off.value.status === "completed" && off.value.stallTimeout === null);
+  const bad = spawnSync(process.execPath, [
+    h.relayPath("cursor"), "--brief", h.briefPath, "--stall-timeout", "soon",
+  ], { env: h.baseEnv, encoding: "utf8" });
+  h.check("cursor stall: invalid --stall-timeout is a usage error (exit 2)", bad.status === 2);
+}
+}

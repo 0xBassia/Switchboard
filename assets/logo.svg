@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+  <title id="t">Switchboard</title>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="#121419" stroke="#c8a24a" stroke-opacity=".55" stroke-width="2"/>
+  <circle cx="47" cy="16" r="4.5" fill="#0c0d10" stroke="#c8a24a" stroke-width="2"/>
+  <circle cx="47" cy="32" r="4.5" fill="#0c0d10" stroke="#c8a24a" stroke-width="2"/>
+  <circle cx="17" cy="32" r="5.5" fill="#0c0d10" stroke="#c8a24a" stroke-width="2.5"/>
+  <path d="M17 32 C17 56 47 58 47 48" fill="none" stroke="#ffb020" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="47" cy="48" r="5" fill="#ffb020"/>
+</svg>

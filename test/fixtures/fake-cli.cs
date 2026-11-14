@@ -1,0 +1,180 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+class FakeCli {
+  static int Main(string[] args) {
+    // Mirrors the .cjs fake: any probe form, and hang/fail selected by the mode's suffix,
+    // so a native-binary relay (agy, kimi, qoder, vibe, aider, oz, omp) enters the same preflight matrix.
+    var mode = Environment.GetEnvironmentVariable("SMOKE_MODE") ?? "";
+    bool versionProbe = Array.IndexOf(args, "--version") >= 0
+      || (args.Length > 0 && (args[0] == "version" || args[0] == "changelog"));
+    if (versionProbe && mode.EndsWith("-version-hang")) {
+      Thread.Sleep(Timeout.Infinite);
+      return 1;
+    }
+    if (versionProbe && mode.EndsWith("-version-fail-silent")) {
+      return 7;
+    }
+    if (versionProbe && mode.EndsWith("-version-fail")) {
+      Console.Error.WriteLine("fake version failure");
+      return 7;
+    }
+    if (versionProbe) {
+      Console.WriteLine("fake-cli 0.0.0-smoke");
+      return 0;
+    }
+    var forwardedArgsFile = Environment.GetEnvironmentVariable("SMOKE_FORWARD_ARGS_FILE");
+    if (!String.IsNullOrEmpty(forwardedArgsFile)) File.WriteAllLines(forwardedArgsFile, args);
+    if (Environment.GetEnvironmentVariable("SMOKE_MODE") == "capture") {
+      File.WriteAllLines(Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE"), args);
+      return 0;
+    }
+    var writeFile = Environment.GetEnvironmentVariable("SMOKE_WRITE_FILE");
+    if (!String.IsNullOrEmpty(writeFile)) File.WriteAllText(writeFile, "written by fake cli\n");
+    if (mode == "aider-success") {
+      File.WriteAllLines(Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE"), args);
+      Console.WriteLine("Applied the edit and updated docs to explain OPENAI_API_KEY setup.");
+      Console.WriteLine("If OPENAI_API_KEY is not set, the tool exits.");
+      Console.WriteLine("Unable to connect without following the documented placeholder key steps.");
+      return 0;
+    }
+    if (mode == "aider-auth-fail") {
+      Console.WriteLine("litellm.AuthenticationError: Authentication Error, Invalid API key");
+      return 0;
+    }
+    if (mode == "aider-exit-nonzero") {
+      Console.Error.WriteLine("fake aider nonzero exit");
+      return 7;
+    }
+    if (mode == "agy-permission-denied") {
+      Console.Error.WriteLine("jetski: no output produced — a tool required the \"write_file\" permission that headless\nmode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow\nin settings.json (e.g. write_file(<target>)). Alternatively, re-run with\n--dangerously-skip-permissions to auto-approve all tools.");
+      return 0;
+    }
+    if (mode.StartsWith("agy-abandoned-background")) {
+      if (mode == "agy-abandoned-background-edit") {
+        File.AppendAllText(Environment.GetEnvironmentVariable("SMOKE_EDIT_FILE"), "dispatch edit\n");
+      }
+      Console.WriteLine("Waiting for the test run to finish.");
+      Console.Error.WriteLine(mode == "agy-abandoned-background-uppercase"
+        ? "Terminating 2 Background Task(s) on Exit"
+        : "terminating 1 background task(s) on exit");
+      return 0;
+    }
+    if (mode == "agy-analysis") {
+      var argsFile = Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE");
+      if (!String.IsNullOrEmpty(argsFile)) File.WriteAllLines(argsFile, args);
+      var logAt = Array.IndexOf(args, "--log-file");
+      if (logAt >= 0) File.WriteAllText(args[logAt + 1], "fake agy log\n");
+      Console.WriteLine("fake agy analysis completed");
+      return 0;
+    }
+    if (mode == "agy-silent-edit") {
+      File.AppendAllText(Environment.GetEnvironmentVariable("SMOKE_EDIT_FILE"), "dispatch edit\n");
+      return 0;
+    }
+    if (mode == "agy-silent-noop") return 0;
+    if (mode == "agy-stall" || mode == "agy-streaming") {
+      var logAt = Array.IndexOf(args, "--log-file");
+      var logPath = logAt >= 0 ? args[logAt + 1] : null;
+      Action<string> log = (text) => { if (logPath != null) File.AppendAllText(logPath, text); };
+      log("I0816 streamGenerateContent\n");
+      var editFile = Environment.GetEnvironmentVariable("SMOKE_EDIT_FILE");
+      if (!String.IsNullOrEmpty(editFile)) File.AppendAllText(editFile, "dispatch edit\n");
+      if (mode == "agy-stall") {
+        while (true) { Thread.Sleep(100); log("I0816 fetchAvailableModels\n"); }
+      }
+      for (int tick = 1; tick <= 40; tick++) {
+        Thread.Sleep(125);
+        log(tick % 2 == 1 ? "I0816 streamGenerate" : "Content\n");
+      }
+      Console.WriteLine("fake agy streamed to completion");
+      return 0;
+    }
+    if (Environment.GetEnvironmentVariable("SMOKE_MODE") == "qoder-success") {
+      File.WriteAllLines(Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE"), args);
+      Console.WriteLine("{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"qoder-session-1\",\"model\":\"performance\",\"permissionMode\":\"auto\"}");
+      Console.WriteLine("{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"session_id\":\"qoder-session-1\",\"result\":\"fake qoder completed\",\"usage\":{\"input_tokens\":7,\"output_tokens\":2}}");
+      return 0;
+    }
+    if (Environment.GetEnvironmentVariable("SMOKE_MODE") == "vibe-success") {
+      File.WriteAllLines(Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE"), args);
+      Console.WriteLine("{\"role\":\"assistant\",\"content\":\"working\"}");
+      Console.WriteLine("{\"role\":\"assistant\",\"content\":\"fake vibe completed\"}");
+      return 0;
+    }
+    if (mode == "omp-success" || mode == "omp-error") {
+      var brief = Console.In.ReadToEnd() ?? "";
+      var failed = mode == "omp-error";
+      var argsFile = Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE");
+      if (!String.IsNullOrEmpty(argsFile)) {
+        var payload = new System.Text.StringBuilder();
+        payload.Append("{\"args\":[");
+        for (int i = 0; i < args.Length; i++) {
+          if (i > 0) payload.Append(",");
+          payload.Append(JsonString(args[i]));
+        }
+        payload.Append("],\"brief\":");
+        payload.Append(JsonString(brief));
+        payload.Append("}");
+        File.WriteAllText(argsFile, payload.ToString());
+      }
+      Console.WriteLine("{\"type\":\"session\",\"version\":3,\"id\":\"omp-session-1\",\"timestamp\":\"2026-01-01T00:00:00.000Z\"}");
+      Console.WriteLine("{\"type\":\"agent_start\"}");
+      if (failed) {
+        Console.WriteLine("{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"fake omp failed\"}],\"provider\":\"google\",\"model\":\"fake-model\",\"usage\":{\"input\":7,\"output\":2,\"cacheRead\":1,\"cacheWrite\":0,\"totalTokens\":10,\"cost\":{\"total\":0.001}},\"stopReason\":\"error\",\"errorMessage\":\"fake provider failure\"}}");
+      } else {
+        Console.WriteLine("{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"fake omp completed\"}],\"provider\":\"google\",\"model\":\"fake-model\",\"usage\":{\"input\":7,\"output\":2,\"cacheRead\":1,\"cacheWrite\":0,\"totalTokens\":10,\"cost\":{\"total\":0.001}},\"stopReason\":\"stop\"}}");
+      }
+      Console.WriteLine("{\"type\":\"agent_end\",\"messages\":[]}");
+      return 0;
+    }
+    if (mode == "muse-success" || mode == "muse-unfinished") {
+      var argsFile = Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE");
+      if (!String.IsNullOrEmpty(argsFile)) File.WriteAllLines(argsFile, args);
+      Console.WriteLine("{\"payload_type\":\"session.run.linked\",\"stream\":{\"kind\":\"session\",\"id\":\"01a06628-aaaa-bbbb-cccc-ddddeeeeffff\"},\"payload\":{}}");
+      if (mode == "muse-success") {
+        Console.WriteLine("{\"payload_type\":\"run.terminal.completed\",\"payload\":{\"kind\":\"run_terminal\",\"terminal\":\"completed\",\"text\":\"fake muse completed\"}}");
+      }
+      return 0;
+    }
+    if (mode == "muse-stderr-flood") {
+      for (int i = 1; i <= 20000; i++) Console.Error.Write("diagnostic " + i + "\n");
+      Console.Error.Write("fatal: last diagnostic\n");
+      return 7;
+    }
+    if (mode == "orphan-holds-stdio") {
+      var logAt = Array.IndexOf(args, "--log-file");
+      if (logAt >= 0) File.WriteAllText(args[logAt + 1], "fake agy log\n");
+      Console.WriteLine("fake implementer completed");
+      var outAt = Array.IndexOf(args, "-o");
+      if (outAt >= 0) File.WriteAllText(args[outAt + 1].Trim('"'), "fake codex completed\n");
+      var delayMs = 0;
+      int.TryParse(Environment.GetEnvironmentVariable("SMOKE_ORPHAN_EXIT_DELAY_MS") ?? "0", out delayMs);
+      var orphanPsi = new ProcessStartInfo {
+        FileName = Environment.GetEnvironmentVariable("SMOKE_NODE") ?? "node",
+        Arguments = "-e setTimeout(()=>{},60000)",
+        UseShellExecute = false,
+      };
+      var orphan = Process.Start(orphanPsi);
+      var orphanPidFile = Environment.GetEnvironmentVariable("SMOKE_GRAND_PID_FILE");
+      if (!String.IsNullOrEmpty(orphanPidFile) && orphan != null) File.WriteAllText(orphanPidFile, orphan.Id.ToString());
+      if (delayMs > 0) Thread.Sleep(delayMs);
+      return 0;
+    }
+    var psi = new ProcessStartInfo {
+      FileName = Environment.GetEnvironmentVariable("SMOKE_NODE"),
+      Arguments = "-e setInterval(()=>{},1000)",
+      UseShellExecute = false,
+    };
+    var grand = Process.Start(psi);
+    File.WriteAllText(Environment.GetEnvironmentVariable("SMOKE_GRAND_PID_FILE"), grand.Id.ToString());
+    File.WriteAllText(Environment.GetEnvironmentVariable("SMOKE_PID_FILE"), Process.GetCurrentProcess().Id.ToString());
+    Thread.Sleep(Timeout.Infinite);
+    return 0;
+  }
+  static string JsonString(string s) {
+    if (s == null) s = "";
+    return "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
+  }
+}

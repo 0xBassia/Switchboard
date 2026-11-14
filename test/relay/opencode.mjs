@@ -1,0 +1,327 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+export async function runOpencode(h) {
+{
+  // Read-only tripwire: clean run, simulated write, and a write-capable run.
+  const runTrip = (name, args, env) => {
+    const outDir = join(h.scratch, `out-tripwire-${name}-opencode`);
+    const run = spawnSync(process.execPath, [
+      h.relayPath("opencode"), "--brief", h.briefPath, "--cd", h.freshRepo(`work-tripwire-${name}-opencode`),
+      "--out-dir", outDir, ...args,
+    ], { env: { ...h.baseEnv, SMOKE_MODE: "opencode-success", SMOKE_ARGS_FILE: join(h.scratch, `args-tripwire-${name}-opencode`), SMOKE_CAPTURE_FILE: join(h.scratch, `capture-tripwire-${name}-opencode`), ...env }, encoding: "utf8" });
+    return { run, value: existsSync(join(outDir, "result.json")) ? h.result(outDir) : {} };
+  };
+  const clean = runTrip("clean", ["--read-only", "--model", "fake/model"], {});
+  h.check("opencode tripwire: clean read-only run is not a violation",
+    clean.run.status === 0 && clean.value.readOnlyViolation === false);
+  const dirty = runTrip("write", ["--read-only", "--model", "fake/model"], { SMOKE_WRITE_FILE: "sneaky.txt" });
+  h.check("opencode tripwire: a write during a read-only run is a violation",
+    dirty.value.readOnlyViolation === true);
+  const normal = runTrip("normal", ["--model", "fake/model"], {});
+  h.check("opencode tripwire: a write-capable run carries no violation",
+    normal.run.status === 0 && (normal.value.readOnlyViolation ?? null) === null);
+}
+{
+  const outDir = join(h.scratch, "out-cost-opencode");
+  spawnSync(process.execPath, [h.relayPath("opencode"), "--brief", h.briefPath, "--cd", h.freshRepo("work-cost-opencode"), "--out-dir", outDir, "--model", "fake/model"],
+    { env: { ...h.baseEnv, SMOKE_MODE: "opencode-success", SMOKE_ARGS_FILE: join(h.scratch, "args-cost-opencode") }, encoding: "utf8" });
+  const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
+  h.check("opencode cost: step costs sum into totalCostUsd", value.totalCostUsd === 0.0035 && value.cost === 0.0035);
+}
+  for (const [flag, value] of [["--session", 'ses_x" & calc.exe & "'], ["--agent", "build & calc.exe"]]) {
+    const outDir = join(h.scratch, `out-unsafe-${flag.slice(2)}-opencode`);
+    const run = spawnSync(process.execPath, [h.relayPath("opencode"), "--brief", h.briefPath, "--cd", h.freshRepo(`work-unsafe-${flag.slice(2)}-opencode`), "--out-dir", outDir, "--model", "fake/model", flag, value],
+      { env: { ...h.baseEnv, SMOKE_MODE: "opencode-success", SMOKE_ARGS_FILE: join(h.scratch, `args-unsafe-${flag.slice(2)}-opencode`) }, encoding: "utf8" });
+    h.check(`opencode ${flag}: a shell-unsafe value is rejected before dispatch`,
+      run.status === 2 && /unsupported characters/.test(run.stderr) && !existsSync(join(outDir, "result.json")));
+  }
+  const workDir = h.freshRepo("work-opencode");
+
+  // Model + variant on opencode 2.x: 2.x replaced the --variant flag with a
+  // provider/model#variant model value (2.0.11's run --help), so the relay joins the dials.
+  const variantOutDir = join(h.scratch, "out-opencode-model-variant");
+  const variantArgsFile = join(h.scratch, "args-opencode-model-variant");
+  const variantRun = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", variantOutDir,
+    "--model", "fake/model",
+    "--variant", "high",
+  ], {
+    env: {
+      ...h.baseEnv,
+      SMOKE_MODE: "opencode-success",
+      SMOKE_ARGS_FILE: variantArgsFile,
+      SMOKE_VERSION: "opencode v2.0.11",
+    },
+    encoding: "utf8",
+  });
+  const variantCapture = existsSync(variantArgsFile) ? JSON.parse(readFileSync(variantArgsFile, "utf8")) : {};
+  h.check("opencode model+variant: relay exits zero", variantRun.status === 0);
+  h.check("opencode model+variant: variant joins the model value",
+    JSON.stringify(variantCapture.args) === JSON.stringify([
+      "run", "--format", "json",
+      "--agent", "build",
+      "--model", "fake/model#high",
+      "--auto",
+    ]));
+  h.check("opencode model+variant: brief delivered through stdin",
+    variantCapture.brief === "smoke brief: run until killed.");
+  h.check("opencode model+variant: result.json exists", existsSync(join(variantOutDir, "result.json")));
+  if (existsSync(join(variantOutDir, "result.json"))) {
+    const value = h.result(variantOutDir);
+    h.check("opencode model+variant: event stream parsed (session, text parts, cost)",
+      value.status === "completed" &&
+      value.sessionId === "ses_smoke_opencode" &&
+      // prt_1's streamed update replaced its partial text; prt_2 appended after it.
+      value.finalMessage === "fake opencode completed — second segment" &&
+      value.cost === 0.0035 &&
+      value.model === "fake/model" &&
+      value.variant === "high" &&
+      value.agent === "build" &&
+      value.auto === true &&
+      value.resumed === false &&
+      Array.isArray(value.touchedFiles) &&
+      value.finalPath !== null &&
+      value.opencodeVersion === "opencode v2.0.11");
+  }
+
+  // Model only: no # join, no --variant anywhere.
+  const modelOutDir = join(h.scratch, "out-opencode-model-only");
+  const modelArgsFile = join(h.scratch, "args-opencode-model-only");
+  const modelRun = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", modelOutDir,
+    "--model", "fake/model",
+  ], {
+    env: { ...h.baseEnv, SMOKE_MODE: "opencode-success", SMOKE_ARGS_FILE: modelArgsFile },
+    encoding: "utf8",
+  });
+  const modelCapture = existsSync(modelArgsFile) ? JSON.parse(readFileSync(modelArgsFile, "utf8")) : {};
+  h.check("opencode model only: argv is exact",
+    modelRun.status === 0 &&
+    JSON.stringify(modelCapture.args) === JSON.stringify([
+      "run", "--format", "json",
+      "--agent", "build",
+      "--model", "fake/model",
+      "--auto",
+    ]) &&
+    existsSync(join(modelOutDir, "result.json")) &&
+    h.result(modelOutDir).model === "fake/model" &&
+    h.result(modelOutDir).variant === null);
+
+  // Plan agent on 2.x: the join still applies, and --auto must never reach a read-only run.
+  const planOutDir = join(h.scratch, "out-opencode-plan-variant");
+  const planArgsFile = join(h.scratch, "args-opencode-plan-variant");
+  const planRun = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", planOutDir,
+    "--agent", "plan",
+    "--model", "fake/model",
+    "--variant", "low",
+  ], {
+    env: {
+      ...h.baseEnv,
+      SMOKE_MODE: "opencode-success",
+      SMOKE_ARGS_FILE: planArgsFile,
+      SMOKE_VERSION: "opencode v2.0.11",
+    },
+    encoding: "utf8",
+  });
+  const planCapture = existsSync(planArgsFile) ? JSON.parse(readFileSync(planArgsFile, "utf8")) : {};
+  h.check("opencode plan: variant joins the model value and no --auto is passed",
+    planRun.status === 0 &&
+    JSON.stringify(planCapture.args) === JSON.stringify([
+      "run", "--format", "json",
+      "--agent", "plan",
+      "--model", "fake/model#low",
+    ]) &&
+    existsSync(join(planOutDir, "result.json")) &&
+    h.result(planOutDir).agent === "plan");
+
+  // A variant does not satisfy the model requirement on a fresh run.
+  const bareVariant = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--variant", "high",
+  ], { env: h.baseEnv, encoding: "utf8" });
+  h.check("opencode --variant without --model is a usage error",
+    bareVariant.status === 2 && /--model/.test(bareVariant.stderr));
+
+  // opencode 1.x still documents --variant; the probe gates the mapping back to the flag.
+  const v1OutDir = join(h.scratch, "out-opencode-v1-variant");
+  const v1ArgsFile = join(h.scratch, "args-opencode-v1-variant");
+  const v1Run = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", v1OutDir,
+    "--model", "fake/model",
+    "--variant", "high",
+  ], {
+    env: {
+      ...h.baseEnv,
+      SMOKE_MODE: "opencode-success",
+      SMOKE_ARGS_FILE: v1ArgsFile,
+      SMOKE_VERSION: "1.18.30",
+    },
+    encoding: "utf8",
+  });
+  const v1Capture = existsSync(v1ArgsFile) ? JSON.parse(readFileSync(v1ArgsFile, "utf8")) : {};
+  h.check("opencode 1.x model+variant: --variant is passed as its own flag",
+    v1Run.status === 0 &&
+    JSON.stringify(v1Capture.args) === JSON.stringify([
+      "run", "--format", "json",
+      "--agent", "build",
+      "--model", "fake/model",
+      "--variant", "high",
+      "--auto",
+    ]) &&
+    existsSync(join(v1OutDir, "result.json")) &&
+    h.result(v1OutDir).opencodeVersion === "1.18.30" &&
+    h.result(v1OutDir).variant === "high");
+
+  // An unparseable version keeps the 1.x mapping — the long-standing behavior.
+  const unknownOutDir = join(h.scratch, "out-opencode-unknown-version");
+  const unknownArgsFile = join(h.scratch, "args-opencode-unknown-version");
+  const unknownRun = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", unknownOutDir,
+    "--model", "fake/model",
+    "--variant", "high",
+  ], {
+    env: {
+      ...h.baseEnv,
+      SMOKE_MODE: "opencode-success",
+      SMOKE_ARGS_FILE: unknownArgsFile,
+      SMOKE_VERSION: "unknown",
+    },
+    encoding: "utf8",
+  });
+  const unknownCapture = existsSync(unknownArgsFile) ? JSON.parse(readFileSync(unknownArgsFile, "utf8")) : {};
+  h.check("opencode unknown version: falls back to the 1.x --variant mapping",
+    unknownRun.status === 0 &&
+    unknownCapture.args.includes("--variant") &&
+    !unknownCapture.args.some((a) => typeof a === "string" && a.includes("#")));
+
+  // A joined model value is forwarded verbatim on 2.x.
+  const joinedOutDir = join(h.scratch, "out-opencode-joined-model");
+  const joinedArgsFile = join(h.scratch, "args-opencode-joined-model");
+  const joinedRun = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", joinedOutDir,
+    "--model", "fake/model#high",
+  ], {
+    env: {
+      ...h.baseEnv,
+      SMOKE_MODE: "opencode-success",
+      SMOKE_ARGS_FILE: joinedArgsFile,
+      SMOKE_VERSION: "opencode v2.0.11",
+    },
+    encoding: "utf8",
+  });
+  const joinedCapture = existsSync(joinedArgsFile) ? JSON.parse(readFileSync(joinedArgsFile, "utf8")) : {};
+  h.check("opencode joined model value: forwarded verbatim, no --variant",
+    joinedRun.status === 0 &&
+    h.pair(joinedCapture.args, "--model", "fake/model#high") &&
+    !joinedCapture.args.includes("--variant"));
+
+  // Catalog ids carrying '@' (Workers AI @cf/, Vertex @default) or '~' (OpenRouter ~latest)
+  // are forwarded verbatim.
+  for (const [shape, model] of [
+    ["Workers AI @cf/", "cloudflare-workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast"],
+    ["Vertex @default", "google-vertex-anthropic/claude-opus-4-8@default"],
+    ["OpenRouter ~latest", "openrouter/~anthropic/claude-sonnet-latest"],
+  ]) {
+    const slug = shape.replace(/\W+/g, "-");
+    const catalogOutDir = join(h.scratch, `out-opencode-catalog-model-${slug}`);
+    const catalogArgsFile = join(h.scratch, `args-opencode-catalog-model-${slug}`);
+    const catalogRun = spawnSync(process.execPath, [
+      h.relayPath("opencode"),
+      "--brief", h.briefPath,
+      "--cd", workDir,
+      "--out-dir", catalogOutDir,
+      "--model", model,
+    ], {
+      env: { ...h.baseEnv, SMOKE_MODE: "opencode-success", SMOKE_ARGS_FILE: catalogArgsFile },
+      encoding: "utf8",
+    });
+    const catalogCapture = existsSync(catalogArgsFile) ? JSON.parse(readFileSync(catalogArgsFile, "utf8")) : {};
+    h.check(`opencode catalog model id (${shape}): forwarded verbatim`,
+      catalogRun.status === 0 && h.pair(catalogCapture.args, "--model", model));
+  }
+
+  // A model that already carries a variant plus an explicit --variant is ambiguous.
+  const conflict = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--model", "fake/model#high",
+    "--variant", "low",
+  ], { env: h.baseEnv, encoding: "utf8" });
+  h.check("opencode joined model plus --variant is a usage error",
+    conflict.status === 2 && /already carries a variant/.test(conflict.stderr));
+
+  // opencode 2.x dropped --pure from `run`; the relay rejects it before dispatching.
+  const pure2ArgsFile = join(h.scratch, "args-opencode-v2-pure");
+  const pure2 = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", join(h.scratch, "out-opencode-v2-pure"),
+    "--model", "fake/model",
+    "--pure",
+  ], {
+    env: {
+      ...h.baseEnv,
+      SMOKE_MODE: "opencode-success",
+      SMOKE_ARGS_FILE: pure2ArgsFile,
+      SMOKE_VERSION: "opencode v2.0.21",
+    },
+    encoding: "utf8",
+  });
+  h.check("opencode 2.x --pure is a usage error",
+    pure2.status === 2 && /--pure/.test(pure2.stderr));
+  h.check("opencode 2.x --pure: the CLI is never dispatched", !existsSync(pure2ArgsFile));
+
+  // 1.x still accepts --pure and forwards it.
+  const pure1OutDir = join(h.scratch, "out-opencode-v1-pure");
+  const pure1ArgsFile = join(h.scratch, "args-opencode-v1-pure");
+  const pure1 = spawnSync(process.execPath, [
+    h.relayPath("opencode"),
+    "--brief", h.briefPath,
+    "--cd", workDir,
+    "--out-dir", pure1OutDir,
+    "--model", "fake/model",
+    "--pure",
+  ], {
+    env: {
+      ...h.baseEnv,
+      SMOKE_MODE: "opencode-success",
+      SMOKE_ARGS_FILE: pure1ArgsFile,
+      SMOKE_VERSION: "1.18.30",
+    },
+    encoding: "utf8",
+  });
+  const pure1Capture = existsSync(pure1ArgsFile) ? JSON.parse(readFileSync(pure1ArgsFile, "utf8")) : {};
+  h.check("opencode 1.x --pure: forwarded to the CLI",
+    pure1.status === 0 &&
+    JSON.stringify(pure1Capture.args) === JSON.stringify([
+      "run", "--format", "json", "--pure",
+      "--agent", "build",
+      "--model", "fake/model",
+      "--auto",
+    ]));
+}
