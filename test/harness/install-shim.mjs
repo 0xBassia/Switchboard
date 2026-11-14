@@ -14,7 +14,8 @@ export function installShim(h) {
   copyFileSync(join(fixturesDir, "fake-cli.cjs"), join(shimDir, "fake-cli.cjs"));
 
   if (WIN) {
-    for (const skill of ["claude", "cline", "codex", "opencode", "grok", "cursor", "pi", "copilot", "zcode", "commandcode"]) {
+    // npm installs these as .cmd shims; omp and oz are native binaries (the compiled fake below).
+    for (const skill of ["claude", "codex", "opencode", "cursor", "pi"]) {
       writeFileSync(join(shimDir, `${binaryName(skill)}.cmd`), `@node "%~dp0fake-cli.cjs" %*\r\n`);
     }
     const windir = process.env.WINDIR || "C:\\Windows";
@@ -22,22 +23,14 @@ export function installShim(h) {
       join(windir, "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe"),
       join(windir, "Microsoft.NET", "Framework", "v4.0.30319", "csc.exe"),
     ].find((p) => existsSync(p));
-    h.check("windows: the in-box C# compiler exists (builds the native fake for agy/kimi/muse/qoder/vibe/aider/oz/omp)", Boolean(csc));
+    h.check("windows: the in-box C# compiler exists (builds the native fake for omp and oz)", Boolean(csc));
     if (csc) {
       const csFile = join(shimDir, "fake-cli.cs");
       copyFileSync(join(fixturesDir, "fake-cli.cs"), csFile);
-      const compiled = spawnSync(csc, ["/nologo", `/out:${join(shimDir, "kimi.exe")}`, csFile], { encoding: "utf8" });
+      const compiled = spawnSync(csc, ["/nologo", `/out:${join(shimDir, "omp.exe")}`, csFile], { encoding: "utf8" });
       h.check("windows: the native fake compiled", compiled.status === 0);
       if (compiled.status === 0) {
-        copyFileSync(join(shimDir, "kimi.exe"), join(shimDir, "agy.exe"));
-        copyFileSync(join(shimDir, "kimi.exe"), join(shimDir, "qodercli.exe"));
-        copyFileSync(join(shimDir, "kimi.exe"), join(shimDir, "vibe.exe"));
-        // aider's pip install puts a native aider.exe in Scripts, and the relay spawns it
-        // without a shell, so a .cmd shim would never be found the way the real one is.
-        copyFileSync(join(shimDir, "kimi.exe"), join(shimDir, "aider.exe"));
-        copyFileSync(join(shimDir, "kimi.exe"), join(shimDir, "oz.exe"));
-        copyFileSync(join(shimDir, "kimi.exe"), join(shimDir, "omp.exe"));
-        copyFileSync(join(shimDir, "kimi.exe"), join(shimDir, "muse.exe"));
+        copyFileSync(join(shimDir, "omp.exe"), join(shimDir, "oz.exe"));
       } else {
         console.error(`${compiled.stdout ?? ""}${compiled.stderr ?? ""}`);
       }
@@ -54,13 +47,10 @@ export function installShim(h) {
 
   h.briefPath = join(h.scratch, "brief.txt");
   writeFileSync(h.briefPath, "smoke brief: run until killed.");
-  // Pin POSIX to the fake because an unrelated `cmd` may exist on the host. Windows
-  // intentionally uses the `cmdc.cmd` shim on PATH, matching the npm install.
   h.baseEnv = {
     ...process.env,
     PATH: shimDir + delimiter + process.env.PATH,
     SMOKE_NODE: process.execPath,
-    COMMANDCODE_BIN: WIN ? "" : join(shimDir, "cmd"),
   };
 
   const slowWriteHook = join(h.scratch, "slow-result-write.cjs");

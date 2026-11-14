@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createHarness } from './harness/create-harness.mjs';
 import { installShim } from './harness/install-shim.mjs';
 
-const queueScript = fileURLToPath(new URL('../skills/delegate-queue/scripts/queue.mjs', import.meta.url));
+const queueScript = fileURLToPath(new URL('../skills/switchboard-queue/scripts/queue.mjs', import.meta.url));
 const POSIX = process.platform !== 'win32';
 const GIT_ENV = {
   GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com',
@@ -174,14 +174,14 @@ test('three codex tasks run in parallel, each in its own worktree', { timeout: 1
   } finally { c.h.cleanup(); }
 });
 
-test('fallback: a missing kimi falls back to codex; no fallback means unavailable', { timeout: 180000 }, async () => {
+test('fallback: a missing pi falls back to codex; no fallback means unavailable', { timeout: 180000 }, async () => {
   const c = setup();
   try {
-    removeShim(c.h, 'kimi');
+    removeShim(c.h, 'pi');
     const repo = c.repo();
     const out = c.outDir();
     const queue = c.queueFile(doc([
-      task('falls-back', { implementer: 'kimi', fallback: [{ implementer: 'codex' }] }),
+      task('falls-back', { implementer: 'pi', fallback: [{ implementer: 'codex' }] }),
     ]));
     const r = await c.run(['run', queue, '--cd', repo, '--out-dir', out], {
       SMOKE_MODE: 'capture', SMOKE_ARGS_FILE: join(c.h.scratch, 'args.json'),
@@ -192,12 +192,12 @@ test('fallback: a missing kimi falls back to codex; no fallback means unavailabl
     const t = res.tasks[0];
     assert.equal(t.status, 'completed');
     assert.equal(t.implementer, 'codex');
-    assert.deepEqual(t.attempts.map(a => a.status), ['kimi_unavailable', 'completed']);
-    assert.deepEqual(t.attempts.map(a => a.implementer), ['kimi', 'codex']);
+    assert.deepEqual(t.attempts.map(a => a.status), ['pi_unavailable', 'completed']);
+    assert.deepEqual(t.attempts.map(a => a.implementer), ['pi', 'codex']);
 
     // No fallback: unavailable, and the queue is partial next to a task that completed.
     const out2 = c.outDir();
-    const queue2 = c.queueFile(doc([task('ok'), task('nope', { implementer: 'kimi' })]));
+    const queue2 = c.queueFile(doc([task('ok'), task('nope', { implementer: 'pi' })]));
     const r2 = await c.run(['run', queue2, '--cd', repo, '--out-dir', out2], {
       SMOKE_MODE: 'capture', SMOKE_ARGS_FILE: join(c.h.scratch, 'args.json'),
     });
@@ -206,7 +206,7 @@ test('fallback: a missing kimi falls back to codex; no fallback means unavailabl
     assert.equal(res2.status, 'partial');
     const nope = res2.tasks.find(t => t.id === 'nope');
     assert.equal(nope.status, 'unavailable');
-    assert.deepEqual(nope.attempts.map(a => a.status), ['kimi_unavailable']);
+    assert.deepEqual(nope.attempts.map(a => a.status), ['pi_unavailable']);
     assert.equal(res2.tasks.find(t => t.id === 'ok').status, 'completed');
   } finally { c.h.cleanup(); }
 });
@@ -283,7 +283,7 @@ test('lanes resolve through the global config; an unknown lane is a usage error'
     const xdg = join(c.h.scratch, 'xdg');
     mkdirSync(join(xdg, 'switchboard'), { recursive: true });
     writeFileSync(join(xdg, 'switchboard', 'config.json'), JSON.stringify({
-      version: 'delegate-fleet.v1', lanes: { builder: { implementer: 'codex' } },
+      version: 'switchboard-fleet.v1', lanes: { builder: { implementer: 'codex' } },
     }));
     const laneEnv = { XDG_CONFIG_HOME: xdg, HOME: c.home, USERPROFILE: c.home };
 
@@ -529,7 +529,7 @@ test('a reviewer without a read-only mode is a usage error', { timeout: 120000 }
   try {
     const repo = c.repo();
     const out = c.outDir();
-    const queue = c.queueFile(doc([task('a', { review: { implementer: 'kimi' } })]));
+    const queue = c.queueFile(doc([task('a', { review: { implementer: 'warp' } })]));
     const r = await c.run(['run', queue, '--cd', repo, '--out-dir', out]);
     assert.equal(r.code, 2, r.stdout + r.stderr);
     assert.match(r.stderr, /cannot review/);

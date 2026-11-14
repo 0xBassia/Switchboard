@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from "node:path";
 
 export async function runPreflight(h) {
-for (const skill of ["codex", "opencode", "grok", "kimi", "muse", "warp"]) {
+for (const skill of ["codex", "opencode", "warp"]) {
   const workDir = h.freshRepo(`work-preflight-${skill}`);
   for (const [suffix, expectedStatus, expectedExit] of [
     ["version-hang", "timeout", 124],
@@ -43,31 +43,14 @@ for (const skill of ["codex", "opencode", "grok", "kimi", "muse", "warp"]) {
     h.result(missingOutDir).status === `${skill}_unavailable`);
 }
 
-if (!h.WIN) {
-  const workDir = h.freshRepo("work-preflight-grok-fallback-budget");
-  const outDir = join(h.scratch, "out-grok-version-fallback-budget");
-  const preflight = spawnSync(process.execPath, [
-    h.relayPath("grok"),
-    "--brief", h.briefPath,
-    "--cd", workDir,
-    "--out-dir", outDir,
-    "--timeout", "1s",
-  ], { env: { ...h.baseEnv, SMOKE_MODE: "grok-version-fallback-budget" }, encoding: "utf8", timeout: 15_000 });
-  h.check("grok preflight: fallback shares one timeout budget",
-    preflight.status === 124 &&
-    existsSync(join(outDir, "result.json")) &&
-    h.result(outDir).status === "timeout");
-}
-
 // Node 24 warns for shell:true plus an args array. Exercise both each .cmd
 // version probe and its dispatch through the native Windows shim harness.
 if (h.WIN && Number(process.versions.node.split(".")[0]) >= 24) {
-  for (const skill of ["cline", "codex", "commandcode", "copilot", "grok", "opencode", "pi", "zcode"]) {
+  for (const skill of ["codex", "opencode", "pi"]) {
     const workDir = h.freshRepo(`work-dep0190-${skill}`);
     const outDir = join(h.scratch, `out-dep0190-${skill}`);
     const argsPath = join(h.scratch, `args-dep0190-${skill}.json`);
     const env = { ...h.baseEnv, SMOKE_MODE: "capture", SMOKE_ARGS_FILE: argsPath };
-    delete env.ZCODE_CLI;
     const run = spawnSync(process.execPath, [
       h.relayPath(skill),
       "--brief", h.briefPath,

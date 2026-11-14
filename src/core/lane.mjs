@@ -1,4 +1,4 @@
-// Fleet lanes: resolve a named lane through the delegate-setup skill and apply
+// Fleet lanes: resolve a named lane through the switchboard-setup skill and apply
 // its dials. Explicit flags always win over lane dials.
 
 import { spawnSync } from "node:child_process";
@@ -20,9 +20,9 @@ export const LANE_CONFLICTS = {
 
 export function applyFleetLane(opts, flagged, implementer, { conflicts = {}, onDial } = {}) {
   if (!opts.lane) return;
-  const script = join(dirname(fileURLToPath(import.meta.url)), "../../delegate-setup/scripts/lane.mjs");
+  const script = join(dirname(fileURLToPath(import.meta.url)), "../../switchboard-setup/scripts/lane.mjs");
   if (!existsSync(script)) {
-    fail("--lane requires the delegate-setup skill installed beside this relay");
+    fail("--lane requires the switchboard-setup skill installed beside this relay");
   }
   const r = spawnSync(
     process.execPath,

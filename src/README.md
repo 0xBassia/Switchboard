@@ -1,10 +1,10 @@
 # Relay sources
 
-Every `skills/<name>-delegate/scripts/relay.mjs` is **generated**. Edit the sources here, then run:
+Every `skills/switchboard-<name>/scripts/relay.mjs` is **generated**. Edit the sources here, then run:
 
 ```sh
 node tools/build.mjs            # rebuild every relay
-node tools/build.mjs kimi       # rebuild one
+node tools/build.mjs codex      # rebuild one
 node tools/build.mjs --check    # CI: fail if a committed relay is stale
 ```
 
@@ -17,7 +17,7 @@ carries no dead code.
 src/core/      shared engine (Node built-ins only)
   relay.mjs      runRelay: intake → lane → artifacts → preflight → supervise → result
   cli.mjs        spec-driven flags, --help from the header comment, brief intake
-  lane.mjs       fleet lane resolution through delegate-setup
+  lane.mjs       fleet lane resolution through switchboard-setup
   proc.mjs       process-group launch, tree kill, async version probe
   run.mjs        run directory, atomic result.json, stdout summary
   scan.mjs       JSON-object and JSONL stream scanners, stderr tail
@@ -54,6 +54,19 @@ The bundler enforces these, and a violation is a build error:
   itself are made private once it has exited.
 - On Windows the relay never resolves a bare command (`git`, the implementer) in the `--cd`
   checkout: `NoDefaultCurrentDirectoryInExePath` is set for itself and inherited by the implementer.
+- Every `git` call the relay makes runs with `core.fsmonitor` switched off (git 2.31+), and the
+  implementer inherits that setting. The repository is pinned before dispatch. If a Git setting that
+  can run commands (filters, diff drivers, `core.fsmonitor`, a hooks path, includes) changes during
+  the run, the relay stops asking Git: `touchedFiles` is `null` and `result.json` gets a `gitError`
+  string. `gitError` also explains other `null` cases, such as a `--cd` that was not inside a Git
+  repository when the run started.
+- The relay keeps only absolute `PATH` entries; an empty or relative entry would resolve inside the
+  checkout.
+- After the implementer exits, the relay sends SIGKILL to everything left in its process group
+  (POSIX). A process that left the group is not covered; on Windows leftovers keep running.
+- The read-only tripwire counts a commit or other ref move, a change to `.git/info/exclude` or
+  `.git/info/attributes`, skip-worktree or assume-unchanged flags, and a changed command-running Git
+  setting as violations. An aborted run reports `readOnlyViolation: null` until the implementer is gone.
 - The `--timeout` watchdog sends SIGTERM, then SIGKILL after 10s, to the process group. A
   run that timed out is never `completed`.
 - An orphaned grandchild holding the stdio pipes cannot wedge the relay.
@@ -65,7 +78,7 @@ Only `key`, `versionField`, `fields` and `launch` are required.
 ```
   key            implementer key: lane lookup, result `tool`, `<key>_unavailable`
   name           display name in messages (default: key)
-  versionField   result field for the probed version, e.g. "kimiVersion"
+  versionField   result field for the probed version, e.g. "codexVersion"
   flags          parseArgs spec for implementer-specific flags
   defaults       option defaults; `timeout: null` disables the watchdog
   laneConflicts, onDial   lane dial precedence (see lane.mjs)
@@ -77,7 +90,7 @@ Only `key`, `versionField`, `fields` and `launch` are required.
   fields(opts, state, run)  configuration/state fields of result.json
   readOnly(opts), tripwire   true arms the tripwire (pass `tripwire` from tripwire.mjs)
   tripwireIgnore(path)  true for repo-relative paths the CLI writes as its own bookkeeping
-                 even when read-only (aider's history files); outside the tripwire
+                 even when read-only; outside the tripwire
   version(opts)  { launch, timeoutMs?, parse?, missing? } to probe, { unavailable: true }
                  when the adapter's own launcher lookup already failed, or null to skip
   prepare(opts, run, state, brief)  last step before launch (profiles, env)
@@ -104,6 +117,6 @@ Flag spec entries are `{ key, kind?: "value" | "bool" | "list", path?, pattern?,
 Every explicitly passed flag marks its key as set, and set keys win over lane dials. The
 common flags `--brief`, `--cd`, `--lane`, `--timeout` and `--out-dir` are built in.
 
-`src/adapters/kimi.mjs` is the minimal reference adapter. `src/adapters/claude.mjs` shows
+`src/adapters/pi.mjs` is a compact reference adapter. `src/adapters/claude.mjs` shows
 stdin briefs, a resolved launcher with cmd.exe shims, a settings profile artifact, the
 tripwire, and a verdict.

@@ -16,7 +16,7 @@ import { existsSync, lstatSync, statSync, writeSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
 import { fail, parseArgs, readBrief } from "./cli.mjs";
 import { parseDuration } from "./duration.mjs";
-import { gitTouchedFiles, hardenGit, pinGitRepository } from "./git.mjs";
+import { gitTouchedFiles, hardenGit, lastGitError, pinGitRepository } from "./git.mjs";
 import { applyFleetLane } from "./lane.mjs";
 import { IS_WIN, killChild, probeVersion, signalExitCode, spawnLaunch } from "./proc.mjs";
 import { makeResultWriter, prepareRunDir, printSummary, privatizeArtifacts, readStderrTail, runArtifactPaths, writeAtomic } from "./run.mjs";
@@ -104,6 +104,8 @@ export async function runRelay(a) {
   // An abort before dispatch never compares a meaningful "after" state, and a
   // terminal ^C reaches the Git baseline too: the verdict is unknown, never false.
   let verdictKnown = true;
+  // While an aborted implementer is still exiting, any verdict would be a guess.
+  const verdictGate = { pending: false };
   const releasePreflight = onRelaySignals((signal) => {
     releasePreflight();
     verdictKnown = false;
@@ -132,7 +134,7 @@ export async function runRelay(a) {
       tokens: normalizeTokens(a.tokens ? a.tokens(state) : null),
       totalCostUsd: finiteOrNull(a.cost ? a.cost(state) : null),
     }),
-    snapshot ? (result) => { result.readOnlyViolation = verdictKnown ? a.tripwire.check(snapshot) : null; } : null,
+    snapshot ? (result) => { result.readOnlyViolation = verdictKnown && !verdictGate.pending ? a.tripwire.check(snapshot) : null; } : null,
   );
   const view = {
     name,
@@ -166,7 +168,10 @@ export async function runRelay(a) {
     return message;
   };
   const report = (outcome) => {
-    const result = write({ finalMessage: finalMessage(), touchedFiles: touched(), ...outcome });
+    const touchedFiles = touched();
+    // Say why touchedFiles is null rather than leave the orchestrator to guess.
+    const gitError = touchedFiles === null ? lastGitError() : null;
+    const result = write({ finalMessage: finalMessage(), touchedFiles, ...(gitError ? { gitError } : {}), ...outcome });
     printSummary(result, run.resultPath, view);
     return result;
   };
@@ -235,10 +240,10 @@ export async function runRelay(a) {
 
   if (a.prepare) await a.prepare(opts, run, state, brief);
   releasePreflight();
-  supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard, probed: Boolean(probe), unavailableStatus, finalBlocked });
+  supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard, probed: Boolean(probe), unavailableStatus, finalBlocked, verdictGate });
 }
 
-function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard, probed, unavailableStatus, finalBlocked }) {
+function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard, probed, unavailableStatus, finalBlocked, verdictGate }) {
   let launch;
   let child;
   try {
@@ -359,9 +364,13 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
       stderrTail: readStderrTail(run.stderrFd),
       error: `the relay was killed by ${signal}; ${name} was terminated with it — inspect the working tree before re-dispatching`,
     });
+    // A first record in case the relay dies during the grace window; the implementer is
+    // still exiting, so it carries no read-only verdict yet.
+    verdictGate.pending = true;
     reportRun(fields());
     setTimeout(() => {
       killChild(child, "SIGKILL");
+      verdictGate.pending = false;
       // The child may flush files during the grace window; refresh the record
       // so it matches the tree the orchestrator will actually find.
       const result = reportRun(fields());
@@ -405,8 +414,9 @@ function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard,
     // An unterminated final line still counts; for the object scanner this is a no-op.
     if (a.scanner) parse("\n");
     if (a.onStderr) a.onStderr(stderrDecoder.end(), state);
-    // Nothing the implementer left running may outlive the report: a background job could
-    // write after the tripwire's last look. On Windows the tree went with the parent.
+    // Nothing the implementer left in its process group may outlive the report: a background
+    // job could write after the tripwire's last look (a process that left the group with
+    // setsid is out of reach). POSIX only; on Windows the leftovers keep running.
     killChild(child, "SIGKILL");
     privatizeArtifacts(run);
     let judged = !watchdogFired && a.verdict ? a.verdict(state, { code, signal }) || {} : {};

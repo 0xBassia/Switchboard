@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a problem with a delegate skill or relay
+description: Report a problem with an implementer skill or relay
 title: "[bug] "
 labels: ["bug"]
 body:
@@ -7,7 +7,7 @@ body:
     id: skill
     attributes:
       label: Skill
-      placeholder: codex-delegate
+      placeholder: switchboard-codex
     validations:
       required: true
   - type: input

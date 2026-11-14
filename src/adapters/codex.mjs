@@ -1,5 +1,5 @@
 /**
- * Switchboard · codex-delegate · relay.mjs
+ * Switchboard · switchboard-codex · relay.mjs
  *
  * Dispatch a self-contained brief to the OpenAI Codex CLI (`codex exec`),
  * capture the run, and write a structured result the orchestrating agent can
@@ -25,7 +25,7 @@
  * Options:
  *   --brief <file>          Path to the brief. If omitted, the brief is read from stdin.
  *   --cd <dir>              Working root for Codex (default: current directory).
- *   --lane <name>           Fleet lane from delegate-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
  *   --model <name>          Codex model (default: Codex's own configured default).
  *   --effort <level>        Reasoning effort, passed to Codex as
  *                           `-c model_reasoning_effort=<level>` (default: Codex's
@@ -114,7 +114,7 @@ const SANDBOX_MODES = ["read-only", "workspace-write", "danger-full-access"];
 const SAFE_SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const SAFE_ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // Model reaches cmd.exe on win32 (shell:true for the codex.cmd shim) - same shell-safe
-// family as grok/pi. Keep in lockstep with delegate-setup MODEL_TOKEN.shellSafe.
+// family as grok/pi. Keep in lockstep with switchboard-setup MODEL_TOKEN.shellSafe.
 const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 // Effort and web search modes are Codex-owned enums that vary by version; the relay
 // checks only for a bare token, which also keeps them inert in cmd.exe on win32.

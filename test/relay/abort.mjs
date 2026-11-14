@@ -12,7 +12,7 @@ if (h.WIN) {
     const grandPidFile = join(h.scratch, `grandpid-abort-${skill}`);
     const workDir = h.freshRepo(`work-abort-${skill}`);
     const lateFile = join(workDir, "late-file.txt");
-    const extraArgs = skill === "agy" ? [...h.EXTRA_ARGS[skill], "--read-only"] : h.EXTRA_ARGS[skill];
+    const extraArgs = h.EXTRA_ARGS[skill];
     const child = h.runRelay(skill, workDir, outDir, extraArgs, { SMOKE_PID_FILE: pidFile, SMOKE_GRAND_PID_FILE: grandPidFile, SMOKE_MODE: "abort", SMOKE_LATE_FILE: lateFile });
     let stderr = "";
     child.stderr.on("data", (d) => { stderr += d; });
@@ -30,27 +30,23 @@ if (h.WIN) {
       h.check(`${skill} aborted: status is "aborted" (got ${r.status})`, r.status === "aborted");
       h.check(`${skill} aborted: the file flushed during shutdown is in touchedFiles`,
         Array.isArray(r.touchedFiles) && r.touchedFiles.some((f) => f.includes("late-file.txt")));
-      if (skill === "agy") {
-        h.check("agy aborted read-only: late shutdown write sets the final violation verdict",
-          r.readOnlyViolation === true);
-      }
     }
     h.check(`${skill} aborted: the implementer's own subprocess is dead (whole tree felled)`,
       grandPid !== null && await h.until(() => !h.alive(grandPid), 20_000));
     if (h.failed) console.error(`${skill} relay stderr tail:\n${stderr.split("\n").slice(-6).join("\n")}`);
   }
 
-  const outDir = join(h.scratch, "out-abort-defiant-vibe");
-  const pidFile = join(h.scratch, "pid-abort-defiant-vibe");
-  const grandPidFile = join(h.scratch, "grandpid-abort-defiant-vibe");
-  const workDir = h.freshRepo("work-abort-defiant-vibe");
-  const child = h.runRelay("vibe", workDir, outDir, [], {
+  const outDir = join(h.scratch, "out-abort-defiant-omp");
+  const pidFile = join(h.scratch, "pid-abort-defiant-omp");
+  const grandPidFile = join(h.scratch, "grandpid-abort-defiant-omp");
+  const workDir = h.freshRepo("work-abort-defiant-omp");
+  const child = h.runRelay("omp", workDir, outDir, [], {
     SMOKE_PID_FILE: pidFile,
     SMOKE_GRAND_PID_FILE: grandPidFile,
     SMOKE_GRAND_IGNORES_SIGTERM: "1",
     SMOKE_MODE: "abort-defiant",
   });
-  h.check("vibe defiant abort: the fake implementer came up",
+  h.check("omp defiant abort: the fake implementer came up",
     await h.until(() => existsSync(pidFile), 10_000));
   const implementerPid = existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8")) : null;
   const grandPid = existsSync(grandPidFile) ? Number(readFileSync(grandPidFile, "utf8")) : null;
@@ -62,12 +58,12 @@ if (h.WIN) {
       resolve(true);
     });
   });
-  h.check("vibe defiant abort: relay exits after forced termination", exited);
-  h.check("vibe defiant abort: result is aborted",
+  h.check("omp defiant abort: relay exits after forced termination", exited);
+  h.check("omp defiant abort: result is aborted",
     existsSync(join(outDir, "result.json")) && h.result(outDir).status === "aborted");
-  h.check("vibe defiant abort: the implementer process is dead",
+  h.check("omp defiant abort: the implementer process is dead",
     implementerPid !== null && await h.until(() => !h.alive(implementerPid), 5000));
-  h.check("vibe defiant abort: the implementer's own subprocess is dead",
+  h.check("omp defiant abort: the implementer's own subprocess is dead",
     grandPid !== null && await h.until(() => !h.alive(grandPid), 5000));
 }
 }

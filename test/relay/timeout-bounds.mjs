@@ -32,35 +32,10 @@ for (const skill of h.SKILLS) {
     env: {
       ...process.env,
       PATH: "",
-      ...(skill === "commandcode" ? { COMMANDCODE_BIN: join(h.scratch, "missing-commandcode") } : {}),
     },
     encoding: "utf8",
     timeout: 10_000,
   });
   h.check(`${skill} timeout: the largest schedulable duration is accepted`, accepted.status !== 2);
-}
-// agy's own --print-timeout carries a 60s grace into the same watchdog, so its ceiling sits
-// one grace window lower and it needs its own row.
-for (const bad of ["NONSENSE", "0s", "", "10", "10s-junk", "1.5s", "1h30", "596h30m24s", "600h"]) {
-  const badRun = spawnSync(process.execPath,
-    [h.relayPath("agy"), "--brief", h.briefPath, "--print-timeout", bad],
-    { env: h.baseEnv, encoding: "utf8" });
-  h.check(`agy print timeout: "${bad}" is rejected`, badRun.status === 2);
-}
-{
-  const outDir = join(h.scratch, "out-agy-version-hang");
-  const preflight = spawnSync(process.execPath, [
-    h.relayPath("agy"),
-    "--brief", h.briefPath,
-    "--cd", h.freshRepo("work-agy-version-hang"),
-    "--out-dir", outDir,
-    "--timeout", "1s",
-  ], { env: { ...h.baseEnv, SMOKE_MODE: "agy-version-hang" }, encoding: "utf8", timeout: 15_000 });
-  const value = existsSync(join(outDir, "result.json")) ? h.result(outDir) : {};
-  h.check("agy preflight: explicit watchdog bounds a hung version probe",
-    preflight.status === 124 &&
-    value.status === "timeout" &&
-    value.error?.includes("version preflight") &&
-    value.error?.includes("was not dispatched"));
 }
 }

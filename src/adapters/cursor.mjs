@@ -1,5 +1,5 @@
 /**
- * Switchboard · cursor-delegate · relay.mjs
+ * Switchboard · switchboard-cursor · relay.mjs
  *
  * Dispatch a self-contained brief to the Cursor Agent CLI (`cursor-agent -p`),
  * capture the run, and write a structured result the orchestrating agent can
@@ -33,7 +33,7 @@
  * Options:
  *   --brief <file>          Path to the brief. If omitted, read it from stdin.
  *   --cd <dir>              Working root for Cursor (default: current directory).
- *   --lane <name>           Fleet lane from delegate-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
  *   --model <name>          Cursor model (default: your Cursor default, usually
  *                           auto). List names with `cursor-agent models`.
  *   --read-only             Run in Cursor's plan mode: read-only analysis, no

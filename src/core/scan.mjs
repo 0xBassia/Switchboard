@@ -4,11 +4,11 @@
 export const MAX_BUFFERED_CHARS = 1_048_576;
 
 // Extracts top-level JSON objects from a stream that may interleave them with
-// non-JSON noise (progress bars, banners) and split them across chunks. Prose
-// holds braces too ("template {model} is unset"), so a candidate object is
-// abandoned as soon as it stops looking like JSON: a `{` must be followed by a
-// key or `}`, and a string cannot hold a raw line break. Otherwise one stray
-// brace would nest every later event until the buffer cap dropped them all.
+// non-JSON noise (progress bars, banners) and split them across chunks. Every
+// supported CLI writes one event per line, so a candidate object that reaches a
+// line break unclosed is abandoned, as is one whose `{` is not followed by a key
+// or `}`. Otherwise one stray brace in a banner would nest every later event
+// until the buffer cap dropped them all.
 export function makeEventScanner(onObject) {
   let buf = "";
   let index = 0;
@@ -41,7 +41,12 @@ export function makeEventScanner(onObject) {
           index += 1;
           continue;
         }
-        if (expectKey && ch !== " " && ch !== "\t" && ch !== "\n" && ch !== "\r") {
+        if (depth > 0 && (ch === "\n" || ch === "\r")) {
+          abandon();
+          index += 1;
+          continue;
+        }
+        if (expectKey && ch !== " " && ch !== "\t") {
           expectKey = false;
           if (ch !== '"' && ch !== "}") {
             // Not an object after all: rescan this character at depth 0.

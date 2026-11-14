@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta property="og:title" content="Switchboard">
-<meta property="og:description" content="Hand off the code. Keep the judgment. Delegate to 18 CLI coding agents, review every diff, land it yourself.">
+<meta property="og:description" content="Hand off the code. Keep the judgment. Delegate to 7 CLI coding agents, review every diff, land it yourself.">
 <meta property="og:image" content="https://raw.githubusercontent.com/0xBassia/switchboard/main/assets/social-card.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="https://raw.githubusercontent.com/0xBassia/switchboard/main/assets/logo.svg" type="image/svg+xml">
 <title>Switchboard</title>
-<meta name="description" content="Switchboard lets your coding agent hand a task to any of 18 CLI coding agents, then review the diff and land it yourself.">
+<meta name="description" content="Switchboard lets your coding agent hand a task to any of 7 CLI coding agents, then review the diff and land it yourself.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -98,7 +98,7 @@ code, pre, .mono { font-family: var(--mono); }
 .hero-actions { display: flex; gap: 14px 22px; align-items: center; flex-wrap: wrap; }
 .hero-actions a.gh { font-weight: 600; text-underline-offset: 5px; }
 
-/* the one orchestrated motion: a patch cord plugs into one of eighteen jacks and its lamp lights */
+/* the one orchestrated motion: a patch cord plugs into one of the jacks and its lamp lights */
 .board { position: absolute; top: 150px; right: max(24px, 6vw); width: 300px; height: 470px; overflow: visible; pointer-events: none; z-index: 0; }
 .board .face { fill: var(--panel-deep); stroke: color-mix(in srgb, var(--brass) 40%, transparent); stroke-width: 2; }
 .board .jack { fill: #0a0b0d; stroke: color-mix(in srgb, var(--brass) 80%, transparent); stroke-width: 2.5; }
@@ -140,7 +140,7 @@ section + section { border-top: 1px solid var(--rule); }
   .step + .step { border-left: 0; padding-left: 0; }
 }
 
-/* The board: the 18 implementers */
+/* The board: the 7 implementers */
 .startlist { width: 100%; border-collapse: collapse; font-size: 16px; }
 .startlist-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
 .startlist th { text-align: left; font: 500 12px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 12px 16px; border-bottom: 2px solid var(--ink); white-space: nowrap; }
@@ -233,7 +233,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
       </div>
     </nav>
     <h1>Hand off the code. <em>Keep the judgment.</em></h1>
-    <p class="lede">Switchboard lets the coding agent you already work with hand a task to any of 18 CLI coding agents: Claude Code, Codex, Cursor, Aider and more. It gets back a structured report and the diff. Your agent reviews the work, re-runs your tests, and lands it. Nothing commits without that review.</p>
+    <p class="lede">Switchboard lets the coding agent you already work with hand a task to any of 7 CLI coding agents: Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi and Warp. It gets back a structured report and the diff. Your agent reviews the work, re-runs your tests, and lands it. Nothing commits without that review.</p>
     <div class="hero-actions">
       <div class="install">
         <code id="install-cmd">npx skills add 0xBassia/switchboard</code>
@@ -285,42 +285,22 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
     <div class="wrap">
       <div class="section-head">
         <span class="eyebrow">The board</span>
-        <h2>Eighteen agents on the line</h2>
-        <p>Each implementer is its own skill, so you install only the ones you use. Each one speaks its CLI's real flags and reports in one shared result format.</p>
+        <h2>Seven agents on the line</h2>
+        <p>Each implementer is its own skill, so you install only the ones you use, for example <code>npx skills add 0xBassia/switchboard --skill switchboard-codex</code>. Each one speaks its CLI's real flags and reports in one shared result format.</p>
       </div>
-      <div class="cols-2">
-        <div class="startlist-wrap">
-          <table class="startlist">
-            <thead><tr><th scope="col">Line</th><th scope="col">Agent</th><th scope="col">Binary</th><th scope="col">Skill</th></tr></thead>
-            <tbody>
-              <tr><td class="line">1</td><td class="cli">Claude Code</td><td><code>claude</code></td><td class="skill">claude-delegate</td></tr>
-              <tr><td class="line">2</td><td class="cli">OpenAI Codex</td><td><code>codex</code></td><td class="skill">codex-delegate</td></tr>
-              <tr><td class="line">3</td><td class="cli">Cursor Agent</td><td><code>cursor-agent</code></td><td class="skill">cursor-delegate</td></tr>
-              <tr><td class="line">4</td><td class="cli">GitHub Copilot CLI</td><td><code>copilot</code></td><td class="skill">copilot-delegate</td></tr>
-              <tr><td class="line">5</td><td class="cli">Aider</td><td><code>aider</code></td><td class="skill">aider-delegate</td></tr>
-              <tr><td class="line">6</td><td class="cli">OpenCode</td><td><code>opencode</code></td><td class="skill">opencode-delegate</td></tr>
-              <tr><td class="line">7</td><td class="cli">Cline CLI</td><td><code>cline</code></td><td class="skill">cline-delegate</td></tr>
-              <tr><td class="line">8</td><td class="cli">Google Antigravity</td><td><code>agy</code></td><td class="skill">agy-delegate</td></tr>
-              <tr><td class="line">9</td><td class="cli">Grok Build</td><td><code>grok</code></td><td class="skill">grok-delegate</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="startlist-wrap">
-          <table class="startlist">
-            <thead><tr><th scope="col">Line</th><th scope="col">Agent</th><th scope="col">Binary</th><th scope="col">Skill</th></tr></thead>
-            <tbody>
-              <tr><td class="line">10</td><td class="cli">Kimi Code</td><td><code>kimi</code></td><td class="skill">kimi-delegate</td></tr>
-              <tr><td class="line">11</td><td class="cli">Mistral Vibe</td><td><code>vibe</code></td><td class="skill">vibe-delegate</td></tr>
-              <tr><td class="line">12</td><td class="cli">Qoder CLI</td><td><code>qodercli</code></td><td class="skill">qoder-delegate</td></tr>
-              <tr><td class="line">13</td><td class="cli">Pi</td><td><code>pi</code></td><td class="skill">pi-delegate</td></tr>
-              <tr><td class="line">14</td><td class="cli">Oh My Pi</td><td><code>omp</code></td><td class="skill">omp-delegate</td></tr>
-              <tr><td class="line">15</td><td class="cli">Warp Agent</td><td><code>oz</code></td><td class="skill">warp-delegate</td></tr>
-              <tr><td class="line">16</td><td class="cli">Z.AI ZCode</td><td><code>zcode</code></td><td class="skill">zcode-delegate</td></tr>
-              <tr><td class="line">17</td><td class="cli">Command Code</td><td><code>cmd</code></td><td class="skill">commandcode-delegate</td></tr>
-              <tr><td class="line">18</td><td class="cli">Muse Code</td><td><code>muse</code></td><td class="skill">muse-delegate</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="startlist-wrap">
+        <table class="startlist">
+          <thead><tr><th scope="col">Line</th><th scope="col">Agent</th><th scope="col">Binary</th><th scope="col">Skill</th></tr></thead>
+          <tbody>
+              <tr><td class="line">1</td><td class="cli">Claude Code</td><td><code>claude</code></td><td class="skill">switchboard-claude</td></tr>
+              <tr><td class="line">2</td><td class="cli">OpenAI Codex</td><td><code>codex</code></td><td class="skill">switchboard-codex</td></tr>
+              <tr><td class="line">3</td><td class="cli">Cursor Agent</td><td><code>cursor-agent</code></td><td class="skill">switchboard-cursor</td></tr>
+              <tr><td class="line">4</td><td class="cli">OpenCode</td><td><code>opencode</code></td><td class="skill">switchboard-opencode</td></tr>
+              <tr><td class="line">5</td><td class="cli">Pi</td><td><code>pi</code></td><td class="skill">switchboard-pi</td></tr>
+              <tr><td class="line">6</td><td class="cli">Oh My Pi</td><td><code>omp</code></td><td class="skill">switchboard-omp</td></tr>
+              <tr><td class="line">7</td><td class="cli">Warp Agent</td><td><code>oz</code></td><td class="skill">switchboard-warp</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -330,7 +310,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
       <div class="section-head">
         <span class="eyebrow">House rules</span>
         <h2>The same guarantees for every agent</h2>
-        <p>All 18 relays run on one shared engine, so a fix or a safeguard lands for every agent at once.</p>
+        <p>All 7 relays run on one shared engine, so a fix or a safeguard lands for every agent at once.</p>
       </div>
       <div class="guarantees">
         <div class="rules">
@@ -348,11 +328,11 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           </div>
           <div class="rule">
             <h3>No runaway processes</h3>
-            <p>The watchdog stops the whole process tree, grandchildren included. An opt-in stall watchdog stops an agent that has gone silent long before the timeout.</p>
+            <p>The watchdog stops the whole process tree, grandchildren included. After the agent exits, anything it left in its process group is killed on macOS and Linux. An opt-in stall watchdog stops an agent that has gone silent long before the timeout.</p>
           </div>
           <div class="rule">
             <h3>Read-only you can check</h3>
-            <p>On 15 of the agents, a read-only run fingerprints the Git working tree before and after. The verdict is true, false, or null when coverage was incomplete. It never reports a clean result it didn't earn.</p>
+            <p>On 6 of the agents (every one but Warp), a read-only run fingerprints the Git working tree before and after. The verdict is true, false, or null when coverage was incomplete. It never reports a clean result it didn't earn.</p>
           </div>
           <div class="rule">
             <h3>Many tasks at once</h3>
@@ -364,9 +344,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           </div>
         </div>
         <div class="code" role="region" aria-label="Example result.json">
-          <div class="bar"><span>result.json</span><span>delegate-relay.result.v1</span></div>
+          <div class="bar"><span>result.json</span><span>switchboard-relay.result.v1</span></div>
 <pre><code>{
-  <span class="k">"schema"</span>: <span class="s">"delegate-relay.result.v1"</span>,
+  <span class="k">"schema"</span>: <span class="s">"switchboard-relay.result.v1"</span>,
   <span class="k">"lane"</span>: <span class="s">"review"</span>,
   <span class="k">"tool"</span>: <span class="s">"claude"</span>,
   <span class="k">"status"</span>: <span class="s">"completed"</span>,
@@ -399,13 +379,13 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
         </ul>
       </div>
       <div class="code" role="region" aria-label="Example lane config">
-        <div class="bar"><span>~/.config/switchboard/config.json</span><span>delegate-fleet.v1</span></div>
+        <div class="bar"><span>~/.config/switchboard/config.json</span><span>switchboard-fleet.v1</span></div>
 <pre><code>{
-  <span class="k">"version"</span>: <span class="s">"delegate-fleet.v1"</span>,
+  <span class="k">"version"</span>: <span class="s">"switchboard-fleet.v1"</span>,
   <span class="k">"lanes"</span>: {
     <span class="k">"review"</span>:   { <span class="k">"implementer"</span>: <span class="s">"claude"</span>, <span class="k">"readOnly"</span>: true },
     <span class="k">"refactor"</span>: { <span class="k">"implementer"</span>: <span class="s">"codex"</span>,  <span class="k">"effort"</span>: <span class="s">"high"</span> },
-    <span class="k">"bulk"</span>:     { <span class="k">"implementer"</span>: <span class="s">"kimi"</span>,   <span class="k">"timeout"</span>: <span class="s">"45m"</span> }
+    <span class="k">"bulk"</span>:     { <span class="k">"implementer"</span>: <span class="s">"pi"</span>,     <span class="k">"timeout"</span>: <span class="s">"45m"</span> }
   }
 }</code></pre>
       </div>

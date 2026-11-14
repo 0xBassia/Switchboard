@@ -83,7 +83,7 @@ before(() => {
   mkdirSync(join(temp, "tools"));
   mkdirSync(join(temp, "src", "core"), { recursive: true });
   mkdirSync(join(temp, "src", "adapters"));
-  mkdirSync(join(temp, "skills", "fake-delegate", "scripts"), { recursive: true });
+  mkdirSync(join(temp, "skills", "switchboard-fake", "scripts"), { recursive: true });
   copyFileSync(join(root, "tools", "build.mjs"), join(temp, "tools", "build.mjs"));
   for (const file of readdirSync(join(root, "src", "core"))) {
     copyFileSync(join(root, "src", "core", file), join(temp, "src", "core", file));
@@ -94,7 +94,7 @@ before(() => {
   writeFileSync(brief, "do the thing\n");
   const built = spawnSync(process.execPath, [join(temp, "tools", "build.mjs"), "fake"], { encoding: "utf8" });
   assert.equal(built.status, 0, built.stderr);
-  relay = join(temp, "skills", "fake-delegate", "scripts", "relay.mjs");
+  relay = join(temp, "skills", "switchboard-fake", "scripts", "relay.mjs");
 });
 
 after(() => rmSync(temp, { recursive: true, force: true }));
@@ -331,6 +331,46 @@ test("read-only: a background write after the implementer exits cannot land unse
   await new Promise((resolve) => setTimeout(resolve, 1800));
   assert.equal(readFileSync(join(repo, "a.txt"), "utf8"), "original\n", "a write landed after the report");
   assert.equal(readResult(outDir).readOnlyViolation, false);
+});
+
+test("a filter defined in an included config file inside the worktree never runs", { skip: !POSIX }, () => {
+  const repo = gitRepo("include-filter");
+  spawnSync("git", ["config", "include.path", "../team.gitconfig"], { cwd: repo });
+  writeFileSync(join(repo, "team.gitconfig"), "[core]\n");
+  const marker = join(temp, "include-filter-ran");
+  const { run, outDir } = runIn(repo, {
+    FAKE_SHELL: `printf '[filter "m"]\\n\\tclean = touch ${marker}; cat\\n' >> team.gitconfig && echo 'a.txt filter=m' > .gitattributes && echo changed > a.txt`,
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(existsSync(marker), false, "the planted filter ran as the user");
+  const result = readResult(outDir);
+  assert.equal(result.touchedFiles, null);
+  assert.match(result.gitError, /changed during the run/);
+});
+
+test("ordinary git config writes (a branch switch) keep touchedFiles", { skip: !POSIX }, () => {
+  const repo = gitRepo("ordinary-config");
+  const { run, outDir } = runIn(repo, { FAKE_SHELL: "git config branch.feature.remote origin && echo x > new.txt" });
+  assert.equal(run.status, 0, run.stderr);
+  const result = readResult(outDir);
+  assert.deepEqual(result.touchedFiles, ["?? new.txt"]);
+  assert.equal(result.gitError, undefined);
+});
+
+test("read-only: a commit, or a file hidden through info/exclude, is a violation", { skip: !POSIX }, () => {
+  const commit = runIn(gitRepo("ro-commit"), { FAKE_READ_ONLY: "1", FAKE_SHELL: "echo changed > a.txt && git -c user.name=t -c user.email=t@example.invalid commit -qam x" });
+  assert.equal(readResult(commit.outDir).readOnlyViolation, true, "commit");
+  const exclude = runIn(gitRepo("ro-exclude"), { FAKE_READ_ONLY: "1", FAKE_SHELL: "echo x > hidden.txt && echo hidden.txt >> .git/info/exclude" });
+  assert.equal(readResult(exclude.outDir).readOnlyViolation, true, "info/exclude");
+});
+
+test("an empty PATH entry cannot make the checkout supply git", { skip: !POSIX }, () => {
+  const repo = gitRepo("path-hijack");
+  const marker = join(temp, "path-hijack-ran");
+  writeFileSync(join(repo, "git"), `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+  const { run } = runIn(repo, { PATH: `:${process.env.PATH}` });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(existsSync(marker), false, "a git committed in the checkout ran");
 });
 
 test("the stall watchdog fells a silent run long before --timeout", { skip: !POSIX }, async () => {

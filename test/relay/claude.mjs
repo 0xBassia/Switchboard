@@ -62,6 +62,9 @@ export async function runClaude(h) {
     h.check("claude success: restriction flags selected",
       capture.args.includes("--strict-mcp-config") &&
       capture.args.includes("--disable-slash-commands"));
+    // The repository's own .claude settings (and their hooks) never load by default.
+    h.check("claude success: only the user's settings load (no repository hooks)",
+      h.pair(capture.args, "--setting-sources", "user"));
 
     const settingsPath = capture.args[capture.args.indexOf("--settings") + 1];
     h.check("claude success: generated profile exists", Boolean(settingsPath) && existsSync(settingsPath));
@@ -77,7 +80,7 @@ export async function runClaude(h) {
         `${shell}(git * push *)`,
         `${shell}(git * push)`,
         `${shell}(claude *)`,
-        `${shell}(*claude-delegate*)`,
+        `${shell}(*switchboard-claude*)`,
       ];
       h.check("claude success: Claude.ai connectors disabled",
         profile.disableClaudeAiConnectors === true);
@@ -106,6 +109,7 @@ export async function runClaude(h) {
     { name: "session", value: "auto", relayArgs: ["--session", "22222222-2222-4222-8222-222222222222"] },
     { name: "resume-last", value: "1m", relayArgs: ["--resume-last"] },
     { name: "integer", value: "400000", relayArgs: [] },
+    { name: "project-settings", value: "auto", relayArgs: ["--project-settings"] },
   ]) {
     const compactOut = join(h.scratch, `out autocompact ${scenario.name} claude`);
     const compactWork = h.freshRepo(`work autocompact ${scenario.name} claude`);
@@ -131,6 +135,10 @@ export async function runClaude(h) {
       const capture = JSON.parse(readFileSync(compactCapture, "utf8"));
       h.check(`claude autocompact ${scenario.name}: requested value reaches argv`,
         h.pair(capture.args, "--autocompact", scenario.value));
+      if (scenario.name === "project-settings") {
+        h.check("claude --project-settings: the repository's settings load only on request",
+          h.pair(capture.args, "--setting-sources", "user,project,local"));
+      }
       if (scenario.name === "session") {
         h.check("claude autocompact session: exact resume is preserved",
           h.pair(capture.args, "--resume", "22222222-2222-4222-8222-222222222222"));

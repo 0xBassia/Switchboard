@@ -3,7 +3,7 @@
 // proven), false (full coverage, nothing moved), null (coverage incomplete).
 
 import { createHash } from "node:crypto";
-import { closeSync, lstatSync, openSync, readSync, readdirSync, readlinkSync, realpathSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { TextDecoder } from "node:util";
 import { gitPinIntact, runGit } from "./git.mjs";
@@ -263,6 +263,29 @@ export function readOnlyVerdict(beforeTree, afterTree, beforeFingerprints) {
 
 // Facade: take the baseline before dispatch, ask for the verdict after. `excluded`
 // lists the relay's own artifact paths, which may live inside the repository.
+// What `git status` does not show but a write can still change: commits and other ref
+// moves (HEAD, branches, stash), and the ignore rules that decide which new files status
+// lists at all.
+function repositoryState(cwd) {
+  try {
+    const refs = runGit(cwd, ["for-each-ref", "--format=%(refname) %(objectname)"], { encoding: "utf8" });
+    let head;
+    try { head = runGit(cwd, ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch { head = "<unborn>"; }
+    let symbolic;
+    try { symbolic = runGit(cwd, ["symbolic-ref", "-q", "HEAD"], { encoding: "utf8" }).trim(); } catch { symbolic = "<detached>"; }
+    const rules = [];
+    for (const name of ["info/exclude", "info/attributes"]) {
+      const path = runGit(cwd, ["rev-parse", "--git-path", name], { encoding: "utf8" }).trim();
+      let text;
+      try { text = readFileSync(resolve(cwd, path), "utf8"); } catch { text = "<absent>"; }
+      rules.push(`${name}\0${text}`);
+    }
+    return JSON.stringify({ head, symbolic, refs, rules });
+  } catch {
+    return null;
+  }
+}
+
 export function readOnlySnapshot(cwd, excluded, ignore) {
   return {
     cwd,
@@ -271,6 +294,7 @@ export function readOnlySnapshot(cwd, excluded, ignore) {
     tree: gitTripwireState(cwd, excluded, ignore),
     prints: fingerprintDirtyPaths(cwd, excluded, ignore),
     hidden: hiddenIndexEntries(cwd),
+    repository: repositoryState(cwd),
   };
 }
 
@@ -280,8 +304,11 @@ export function readOnlyCheck(snapshot) {
   if (!gitPinIntact()) return true;
   const hidden = hiddenIndexEntries(snapshot.cwd);
   if (snapshot.hidden !== null && hidden !== null && JSON.stringify(hidden) !== JSON.stringify(snapshot.hidden)) return true;
+  const repository = repositoryState(snapshot.cwd);
+  if (snapshot.repository !== null && repository !== null && repository !== snapshot.repository) return true;
   const verdict = readOnlyVerdict(snapshot.tree, gitTripwireState(snapshot.cwd, snapshot.excluded, snapshot.ignore), snapshot.prints);
-  return verdict === false && (snapshot.hidden === null || hidden === null) ? null : verdict;
+  const covered = snapshot.hidden !== null && hidden !== null && snapshot.repository !== null && repository !== null;
+  return verdict === false && !covered ? null : verdict;
 }
 
 export const tripwire = { snapshot: readOnlySnapshot, check: readOnlyCheck };

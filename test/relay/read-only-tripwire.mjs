@@ -90,11 +90,7 @@ async function runScenario(h, skill, scenario) {
     ? "already-dirty.txt"
     : scenario.caseDistinctUserWrite ? "FINAL.TXT" : null;
   const child = h.runRelay(skill, workDir, outDir, ["--read-only"], {
-    SMOKE_MODE: skill === "grok"
-      ? "grok-read-only"
-      : skill === "commandcode"
-        ? (appendFile ? "commandcode-read-only-append" : "commandcode-read-only-clean")
-        : appendFile ? "claude-read-only-append" : "claude-read-only-clean",
+    SMOKE_MODE: appendFile ? "claude-read-only-append" : "claude-read-only-clean",
     ...(appendFile ? { SMOKE_APPEND_FILE: appendFile } : {}),
     ...(scenario.untrackedDirectory ? { SMOKE_WRITE_FILE: join("loose", "new.txt") } : {}),
     ...(scenario.invalidUtf8 ? { SMOKE_APPEND_INVALID_UTF8: "696e76616c69642dff" } : {}),
@@ -109,28 +105,19 @@ async function runScenario(h, skill, scenario) {
     } : {}),
   });
   const outcome = await waitFor(child);
-  // `exit` applies to every tripwire relay; commandcode refuses some setups
-  // outright before dispatch, recorded as commandcodeExit.
-  const expectedExit = skill === "commandcode" && scenario.commandcodeExit !== undefined
-    ? scenario.commandcodeExit
-    : scenario.exit ?? 0;
-  const expectedResult = skill === "commandcode" && scenario.commandcodeResult !== undefined
-    ? scenario.commandcodeResult
-    : true;
+  const expectedExit = scenario.exit ?? 0;
+  const expectedResult = true;
   h.check(`${skill} ${scenario.name}: relay close wait did not time out`, outcome.exited);
   h.check(`${skill} ${scenario.name}: relay exits ${expectedExit}`, outcome.exitCode === expectedExit);
   h.check(`${skill} ${scenario.name}: result.json ${expectedResult ? "exists" : "is not created"}`,
     existsSync(join(outDir, "result.json")) === expectedResult);
   if (existsSync(join(outDir, "result.json"))) {
     const verdict = h.result(outDir).readOnlyViolation;
-    const expected = skill === "commandcode" && scenario.commandcodeExpected !== undefined
-      ? scenario.commandcodeExpected
-      : scenario.expected;
+    const expected = scenario.expected;
     h.check(`${skill} ${scenario.name}: verdict is ${String(expected)} (got ${String(verdict)})`,
       verdict === expected);
   }
-  // A pre-existing symlink at an artifact path is unlinked (or refused, for
-  // commandcode), never written through, so the user's file stays intact.
+  // A pre-existing symlink at an artifact path is unlinked, never written through, so the user's file stays intact.
   if (scenario.artifactSymlink) {
     h.check(`${skill} artifact-symlink-target-write: final report does not overwrite the symlink target`,
       readFileSync(join(workDir, "already-dirty.txt"), "utf8") === "pre-existing\n");
@@ -174,74 +161,73 @@ export async function runReadOnlyTripwire(h) {
       caseDistinctUserWrite: true,
       expected: true,
     }] : []),
-    { name: "preexisting-artifact-rename", artifactsInside: true, preexistingArtifactRename: true, expected: false, commandcodeExit: 2, commandcodeResult: false },
+    { name: "preexisting-artifact-rename", artifactsInside: true, preexistingArtifactRename: true, expected: false },
     { name: "artifact-endpoint-rename", artifactsInside: true, artifactEndpointRename: true, expected: true, exit: 1 },
     { name: "relay-artifacts-plus-write", artifactsInside: true, dirty: true, expected: true },
     ...(!h.WIN ? [{ name: "raw-symlink-target-write", rawSymlinkTarget: true, expected: true }] : []),
-    ...(!h.WIN ? [{ name: "artifact-symlink-target-write", artifactsInside: true, artifactSymlink: true, expected: false, commandcodeExit: 2, commandcodeResult: false }] : []),
+    ...(!h.WIN ? [{ name: "artifact-symlink-target-write", artifactsInside: true, artifactSymlink: true, expected: false }] : []),
   ];
-  const tripwireSkills = ["claude", "grok", ...(!h.WIN ? ["commandcode"] : [])];
-  if (h.WIN) console.log("  skip  commandcode tripwire scenarios: Git-visible tripwire coverage is POSIX-only");
+  const tripwireSkills = ["claude"];
   for (const skill of tripwireSkills) {
     for (const scenario of scenarios) await runScenario(h, skill, scenario);
   }
 
   if (h.WIN) {
-    console.log("  skip  grok abort/result artifacts: Windows delivers no catchable SIGTERM");
-    console.log("  skip  grok spawn error: shell:true reports a shell exit, not a spawn error, on Windows");
+    console.log("  skip  claude abort/result artifacts: Windows delivers no catchable SIGTERM");
+    console.log("  skip  claude spawn error: shell:true reports a shell exit, not a spawn error, on Windows");
     return;
   }
   {
-    const workDir = h.freshRepo("work-grok-abort-artifacts");
-    const pidFile = join(h.scratch, "pid-grok-abort-artifacts");
-    const grandPidFile = join(h.scratch, "grandpid-grok-abort-artifacts");
-    const child = h.runRelay("grok", workDir, workDir, ["--read-only"], {
+    const workDir = h.freshRepo("work-claude-abort-artifacts");
+    const pidFile = join(h.scratch, "pid-claude-abort-artifacts");
+    const grandPidFile = join(h.scratch, "grandpid-claude-abort-artifacts");
+    const child = h.runRelay("claude", workDir, workDir, ["--read-only"], {
       SMOKE_MODE: "abort",
       SMOKE_PID_FILE: pidFile,
       SMOKE_GRAND_PID_FILE: grandPidFile,
-      SMOKE_LATE_FILE: join(h.scratch, "late-grok-abort-artifacts.txt"),
+      SMOKE_LATE_FILE: join(h.scratch, "late-claude-abort-artifacts.txt"),
     });
-    h.check("grok abort/result artifacts: fake implementer came up",
+    h.check("claude abort/result artifacts: fake implementer came up",
       await h.until(() => existsSync(pidFile), 10_000));
     const grandPid = existsSync(grandPidFile) ? Number(readFileSync(grandPidFile, "utf8")) : null;
     child.kill("SIGTERM");
     const outcome = await waitFor(child);
-    h.check("grok abort/result artifacts: relay exits after grace window", outcome.exited);
-    h.check("grok abort/result artifacts: result.json exists", existsSync(join(workDir, "result.json")));
+    h.check("claude abort/result artifacts: relay exits after grace window", outcome.exited);
+    h.check("claude abort/result artifacts: result.json exists", existsSync(join(workDir, "result.json")));
     if (existsSync(join(workDir, "result.json"))) {
       const result = h.result(workDir);
-      h.check("grok abort/result artifacts: status is aborted", result.status === "aborted");
-      h.check("grok abort/result artifacts: relay files do not prove a violation",
+      h.check("claude abort/result artifacts: status is aborted", result.status === "aborted");
+      h.check("claude abort/result artifacts: relay files do not prove a violation",
         result.readOnlyViolation === false);
     }
-    h.check("grok abort/result artifacts: implementer subprocess is dead",
+    h.check("claude abort/result artifacts: implementer subprocess is dead",
       grandPid !== null && await h.until(() => !h.alive(grandPid), 10_000));
   }
-  const workDir = join(h.scratch, "work-grok-spawn-error");
-  const outDir = join(h.scratch, "out-grok-spawn-error");
+  const workDir = join(h.scratch, "work-claude-spawn-error");
+  const outDir = join(h.scratch, "out-claude-spawn-error");
   mkdirSync(workDir);
   const shimDir = h.baseEnv.PATH.split(delimiter)[0];
-  const removedShim = join(shimDir, "grok.removed");
-  const grokShim = join(shimDir, "grok");
-  writeFileSync(grokShim,
+  const removedShim = join(shimDir, "claude.removed");
+  const claudeShim = join(shimDir, "claude");
+  writeFileSync(claudeShim,
     `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(join(shimDir, "fake-cli.cjs"))} "$@"\n`);
   const child = spawn(process.execPath, [
-    h.relayPath("grok"), "--brief", h.briefPath, "--cd", workDir, "--out-dir", outDir, "--read-only",
-  ], { env: { ...h.baseEnv, PATH: shimDir, SMOKE_MODE: "grok-spawn-error" }, stdio: ["ignore", "pipe", "pipe"] });
+    h.relayPath("claude"), "--brief", h.briefPath, "--cd", workDir, "--out-dir", outDir, "--read-only",
+  ], { env: { ...h.baseEnv, PATH: shimDir, SMOKE_MODE: "claude-spawn-error" }, stdio: ["ignore", "pipe", "pipe"] });
   let stdout = "";
   child.stdout.on("data", (data) => { stdout += data; });
   let outcome;
   try {
     outcome = await waitFor(child);
   } finally {
-    if (existsSync(removedShim)) renameSync(removedShim, grokShim);
+    if (existsSync(removedShim)) renameSync(removedShim, claudeShim);
   }
-  h.check("grok spawn error: relay exits one", outcome.exitCode === 1);
-  h.check("grok spawn error: result.json exists", existsSync(join(outDir, "result.json")));
+  h.check("claude spawn error: relay exits one", outcome.exitCode === 1);
+  h.check("claude spawn error: result.json exists", existsSync(join(outDir, "result.json")));
   if (existsSync(join(outDir, "result.json"))) {
     const result = JSON.parse(readFileSync(join(outDir, "result.json"), "utf8"));
-    h.check("grok spawn error: unknown verdict is present", result.readOnlyViolation === null);
+    h.check("claude spawn error: unknown verdict is present", result.readOnlyViolation === null);
   }
-  h.check("grok spawn error: summary warns about incomplete coverage", stdout.includes("incomplete"));
-  h.check("grok spawn error: summary is printed once", stdout.split("relay: failed").length === 2);
+  h.check("claude spawn error: summary warns about incomplete coverage", stdout.includes("incomplete"));
+  h.check("claude spawn error: summary is printed once", stdout.split("relay: failed").length === 2);
 }

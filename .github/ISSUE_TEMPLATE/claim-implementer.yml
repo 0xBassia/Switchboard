@@ -1,6 +1,6 @@
 name: Claim an implementer
-description: Say you are building a delegate skill for a CLI, before you write it.
-title: "claim: <cli>-delegate"
+description: Say you are building an implementer skill for a CLI, before you write it.
+title: "claim: switchboard-<cli>"
 labels: ["implementer"]
 body:
   - type: markdown

@@ -16,8 +16,8 @@ if (!process.env.SMOKE_MODE) {
     Object.assign(process.env, JSON.parse(fs.readFileSync(require("node:path").join(__dirname, "smoke-fallback.json"), "utf8")));
   } catch { /* no environment-isolation fixture */ }
 }
-// Every probe form one relay or another uses: --version, grok's \`version\` subcommand, and
-// agy's \`changelog\`. Treating them alike lets any relay's hang/fail mode be driven by name.
+// Every probe form one relay or another uses: --version and the \`version\` / \`changelog\`
+// subcommands. Treating them alike lets any relay's hang/fail mode be driven by name.
 const versionProbe = args.includes("--version") || args[0] === "version" || args[0] === "changelog";
 // Any relay's read-only test can simulate an implementer that writes despite the mode:
 // SMOKE_WRITE_FILE names a path (relative to the child cwd) written once at dispatch.
@@ -30,16 +30,9 @@ if (versionProbe && process.env.SMOKE_PREFLIGHT_ENV_FILE) {
 if (versionProbe && process.env.SMOKE_PREFLIGHT_PID_FILE) {
   fs.writeFileSync(process.env.SMOKE_PREFLIGHT_PID_FILE, String(process.pid));
 }
-if (versionProbe && process.env.SMOKE_MODE === "grok-spawn-error" && process.platform !== "win32") {
-  fs.renameSync(require("node:path").join(__dirname, "grok"), require("node:path").join(__dirname, "grok.removed"));
-  console.log(fakeVersion);
-  process.exit(0);
-} else if (versionProbe && process.env.SMOKE_MODE === "grok-version-fallback-budget") {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
-  if (args[0] === "version") {
-    console.error("fake documented version failure");
-    process.exit(7);
-  }
+if (versionProbe && /-spawn-error$/.test(process.env.SMOKE_MODE || "") && process.platform !== "win32") {
+  const key = process.env.SMOKE_MODE.replace(/-spawn-error$/, "");
+  fs.renameSync(require("node:path").join(__dirname, key), require("node:path").join(__dirname, key + ".removed"));
   console.log(fakeVersion);
   process.exit(0);
 } else if (versionProbe && /-version-hang$/.test(process.env.SMOKE_MODE || "")) {
@@ -128,7 +121,7 @@ if (process.env.SMOKE_MODE === "orphan-holds-stdio") {
   // Unlike the timeout-tree fixture (stdio: "ignore") this grandchild inherits, which is the
   // whole point: holding the pipes open is the failure, not merely outliving the parent.
   const logAt = args.indexOf("--log-file");
-  if (logAt !== -1) fs.writeFileSync(args[logAt + 1], "fake agy log" + String.fromCharCode(10));
+  if (logAt !== -1) fs.writeFileSync(args[logAt + 1], "fake implementer log" + String.fromCharCode(10));
   console.log("fake implementer completed");
   const outAt = args.indexOf("-o");
   if (outAt !== -1) {
@@ -150,13 +143,6 @@ if (process.env.SMOKE_MODE === "orphan-holds-stdio") {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
   }
   process.exit(0);
-}
-if (process.env.SMOKE_MODE === "muse-stderr-flood") {
-  // Many small lines, each written synchronously: the total exceeds the relay's
-  // 64 KiB tail window many times over without relying on one huge pipe write.
-  for (let i = 1; i <= 20000; i += 1) fs.writeSync(2, `diagnostic ${i}\n`);
-  fs.writeSync(2, "fatal: last diagnostic\n");
-  process.exit(7);
 }
 if (process.env.SMOKE_MODE === "codex-stderr-long-line") {
   // The 64 KiB suffix starts inside a four-byte character.
@@ -188,147 +174,6 @@ if (process.env.SMOKE_MODE === "codex-stderr-flood") {
   }
   fs.writeSync(2, "fatal: dispatch failed after the flood\n");
   process.exit(1);
-}
-if (process.env.SMOKE_MODE === "aider-success") {
-  fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  // Mentions OPENAI_API_KEY in prose so a bare-substring matcher would false-fail.
-  console.log("Applied the edit and updated docs to explain OPENAI_API_KEY setup.");
-  console.log("If OPENAI_API_KEY is not set, the tool exits.");
-  console.log("Unable to connect without following the documented placeholder key steps.");
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "aider-auth-fail") {
-  console.log("litellm.AuthenticationError: Authentication Error, Invalid API key");
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "aider-exit-nonzero") {
-  console.error("fake aider nonzero exit");
-  process.exit(7);
-}
-if (process.env.SMOKE_MODE === "agy-permission-denied") {
-  console.error('jetski: no output produced — a tool required the "write_file" permission that headless\nmode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow\nin settings.json (e.g. write_file(<target>)). Alternatively, re-run with\n--dangerously-skip-permissions to auto-approve all tools.');
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE?.startsWith("agy-abandoned-background")) {
-  if (process.env.SMOKE_MODE === "agy-abandoned-background-edit") {
-    fs.appendFileSync(process.env.SMOKE_EDIT_FILE, "dispatch edit\n");
-  }
-  console.log("Waiting for the test run to finish.");
-  console.error(process.env.SMOKE_MODE === "agy-abandoned-background-uppercase"
-    ? "Terminating 2 Background Task(s) on Exit"
-    : "terminating 1 background task(s) on exit");
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "agy-analysis") {
-  if (process.env.SMOKE_ARGS_FILE) fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  const logAt = args.indexOf("--log-file");
-  if (logAt !== -1) fs.writeFileSync(args[logAt + 1], "fake agy log\n");
-  console.log("fake agy analysis completed");
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "agy-silent-edit") {
-  fs.appendFileSync(process.env.SMOKE_EDIT_FILE, "dispatch edit\n");
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "agy-silent-noop") process.exit(0);
-// agy-stall: one generation call, then only reconnect handshakes - the log keeps growing but
-// no model request follows. agy-streaming: generation calls keep coming, each marker written in
-// two halves so the relay's log watch must join a marker split across reads.
-if (process.env.SMOKE_MODE === "agy-stall" || process.env.SMOKE_MODE === "agy-streaming") {
-  const logAt = args.indexOf("--log-file");
-  const log = (text) => { if (logAt !== -1) fs.appendFileSync(args[logAt + 1], text); };
-  log("I0816 streamGenerateContent\n");
-  // #89's shape: the edits land, then the stream dies before the run can finish.
-  if (process.env.SMOKE_EDIT_FILE) fs.appendFileSync(process.env.SMOKE_EDIT_FILE, "dispatch edit\n");
-  if (process.env.SMOKE_MODE === "agy-stall") {
-    setInterval(() => log("I0816 fetchAvailableModels\n"), 100);
-  } else {
-    let ticks = 0;
-    const stream = setInterval(() => {
-      ticks += 1;
-      log(ticks % 2 ? "I0816 streamGenerate" : "Content\n");
-      if (ticks >= 40) {
-        clearInterval(stream);
-        console.log("fake agy streamed to completion");
-        process.exit(0);
-      }
-    }, 125);
-  }
-  return;
-}
-if (process.env.SMOKE_MODE === "zcode-success") {
-  fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  // ZCode's bundled AI SDK prints this banner with console.info — i.e. on stdout,
-  // ahead of the JSON document. The relay must parse past it.
-  console.log("AI SDK Warning System: To turn off warning logging, set the AI_SDK_LOG_WARNINGS global to false.");
-  console.log(JSON.stringify({
-    sessionId: "sess_smoke-1",
-    traceId: "trace-1",
-    turnId: "turn_1",
-    response: "fake zcode completed",
-    usage: {
-      source: "provider",
-      modelRequestCount: 1,
-      inputTokens: 7,
-      outputTokens: 2,
-      totalTokens: 9,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      reasoningTokens: 0,
-    },
-    eventCount: 12,
-    projection: {
-      status: "idle",
-      turnCount: 1,
-      totalTokenCount: 9,
-      contextUsed: 9,
-      contextWindow: 200000,
-    },
-  }, null, 2));
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "zcode-garbled") {
-  // Exit 0 with output that never parses: the relay must still complete, but say so.
-  console.log("not json at all");
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "qoder-success") {
-  fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  console.log(JSON.stringify({
-    type: "system",
-    subtype: "init",
-    session_id: "qoder-session-1",
-    model: "performance",
-    permissionMode: "auto",
-  }));
-  console.log(JSON.stringify({
-    type: "assistant",
-    message: { role: "assistant", content: [{ type: "text", text: "working" }] },
-    session_id: "qoder-session-1",
-  }));
-  console.log(JSON.stringify({
-    type: "result",
-    subtype: "success",
-    is_error: false,
-    session_id: "qoder-session-1",
-    result: "fake qoder completed",
-    usage: { input_tokens: 7, output_tokens: 2 },
-  }));
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "vibe-success") {
-  fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  console.log(JSON.stringify({ role: "assistant", content: "working" }));
-  fs.writeSync(1, JSON.stringify({ role: "assistant", content: "fake vibe completed" }));
-  process.exit(0);
-}
-if (process.env.SMOKE_MODE === "grok-read-only") {
-  if (process.env.SMOKE_APPEND_FILE) {
-    fs.appendFileSync(process.env.SMOKE_APPEND_FILE, "appended by fake grok\n");
-  }
-  console.log(JSON.stringify({ type: "text", data: "fake grok completed" }));
-  console.log(JSON.stringify({ type: "end", sessionId: "grok-session-1" }));
-  process.exit(0);
 }
 if (["omp-success", "omp-error"].includes(process.env.SMOKE_MODE)) {
   let brief = "";
@@ -378,99 +223,6 @@ if (["omp-success", "omp-error"].includes(process.env.SMOKE_MODE)) {
     console.log(JSON.stringify({ type: "agent_end", messages: [] }));
     process.exit(0);
   });
-} else if (["cline-success", "cline-error"].includes(process.env.SMOKE_MODE)) {
-  let brief = "";
-  process.stdin.setEncoding("utf8");
-  process.stdin.on("data", (chunk) => { brief += chunk; });
-  process.stdin.on("end", () => {
-    const failed = process.env.SMOKE_MODE === "cline-error";
-    fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify({ args, brief, cwd: process.cwd() }));
-    console.log(JSON.stringify({
-      type: "run_start",
-      modelId: "fake-model",
-      providerId: "fake",
-      cwd: process.cwd(),
-    }));
-    console.log(JSON.stringify({ type: "agent_event", agentType: "task", subagent: false, message: { type: "text", text: "working" } }));
-    console.log(JSON.stringify({
-      type: "run_result",
-      finishReason: failed ? "error" : "completed",
-      text: failed ? "fake cline failed" : "fake cline completed",
-      usage: { inputTokens: 7, outputTokens: 2 },
-      model: { id: "fake-model", provider: "fake" },
-      durationMs: 42,
-    }));
-    process.exit(failed ? 1 : 0);
-  });
-} else if ([
-  "commandcode-success",
-  "commandcode-unfinished",
-  "commandcode-read-only-clean",
-  "commandcode-read-only-append",
-  "commandcode-truncated-tail",
-].includes(process.env.SMOKE_MODE)) {
-  let brief = "";
-  process.stdin.setEncoding("utf8");
-  process.stdin.on("data", (chunk) => { brief += chunk; });
-  process.stdin.on("end", () => {
-    const unfinished = process.env.SMOKE_MODE === "commandcode-unfinished";
-    if (process.env.SMOKE_MODE === "commandcode-read-only-append") {
-      fs.appendFileSync(process.env.SMOKE_APPEND_FILE ?? "already-dirty.txt", "appended by fake commandcode\n");
-    }
-    if (process.env.SMOKE_ARGS_FILE) fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify({ args, brief, cwd: process.cwd() }));
-    // Blocking writes in the truncated case, so the cut tail is the only thing under test:
-    // an async write followed by process.exit would drop these earlier lines too, which is
-    // the CLI bug itself rather than the parsing contract this case exists to pin.
-    const emit = process.env.SMOKE_MODE === "commandcode-truncated-tail"
-      ? (value) => fs.writeSync(1, `${JSON.stringify(value)}\n`)
-      : (value) => console.log(JSON.stringify(value));
-    // The session id arrives on the FIRST line, and the report in a message_end, both well
-    // before the oversized tail — which is why the relay reads them from here.
-    emit({ type: "event", event: { type: "run_start", sessionId: "commandcode-session-1" } });
-    emit({
-      type: "event",
-      event: {
-        type: "message_end",
-        content: [{ type: "text", text: unfinished ? "ran out of turns partway" : "fake commandcode completed" }],
-      },
-    });
-    emit({ type: "event", event: { type: "turn_end", turnNumber: 1, hadToolCalls: true } });
-    if (process.env.SMOKE_MODE === "commandcode-truncated-tail") {
-      // What cmd does on a real run: an oversized run_end cut mid-write, and no result
-      // line after it. writeSync so the cut is the only thing under test — an async write
-      // followed by process.exit would drop the earlier lines too, which is the CLI bug
-      // itself rather than the parsing contract this case is here to pin.
-      fs.writeSync(1, `{"type":"event","event":{"type":"run_end","result":{"nextState":{"blob":"${"y".repeat(4096)}`);
-      process.exit(0);
-    }
-    // run_end carries the session id nested, as the real CLI does; the result line repeats it.
-    emit({
-      type: "event",
-      event: { type: "run_end", result: { nextState: { sessionId: "commandcode-session-1" } } },
-    });
-    emit({
-      type: "result",
-      subtype: unfinished ? "max_turns" : "success",
-      sessionId: "commandcode-session-1",
-      stopReason: unfinished ? "max_turns" : "end_turn",
-      usage: { inputTokens: 7, outputTokens: 2, cacheReadTokens: 1, cacheWriteTokens: 0 },
-      durationMs: 42,
-      finalText: unfinished ? "ran out of turns partway" : "fake commandcode completed",
-    });
-    // The real CLI exits 0 for a clean run even when the task did not finish.
-    process.exit(0);
-  });
-} else if (process.env.SMOKE_MODE === "copilot-success") {
-  fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  console.log(JSON.stringify({ type: "assistant.message", data: { content: "working" }, ephemeral: false }));
-  console.log(JSON.stringify({ type: "assistant.message", data: { content: "fake copilot completed" }, ephemeral: false }));
-  console.log(JSON.stringify({ type: "result", sessionId: "copilot-session-1", exitCode: 0, usage: { codeChanges: { linesAdded: 5, linesRemoved: 2, filesModified: ["src/main.js"] } } }));
-  process.exit(0);
-} else if (process.env.SMOKE_MODE === "copilot-denied") {
-  fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  console.log(JSON.stringify({ type: "tool.execution_complete", data: { success: false, error: { message: "Permission denied and could not request permission from user", code: "denied" } } }));
-  console.log(JSON.stringify({ type: "result", sessionId: "copilot-session-denied", exitCode: 0, usage: { codeChanges: { linesAdded: 0, linesRemoved: 0, filesModified: [] } } }));
-  process.exit(0);
 } else if (["cursor-success", "claude-success", "claude-read-only-write", "claude-read-only-clean", "claude-read-only-append", "claude-chunked"].includes(process.env.SMOKE_MODE)) {
   let brief = "";
   process.stdin.setEncoding("utf8");
@@ -555,20 +307,6 @@ if (["omp-success", "omp-error"].includes(process.env.SMOKE_MODE)) {
     emit({ type: "step_finish", sessionID: sid, part: { type: "step-finish", cost: 0.0025 } });
     process.exit(0);
   });
-} else if (["muse-success", "muse-unfinished"].includes(process.env.SMOKE_MODE)) {
-  if (process.env.SMOKE_ARGS_FILE) fs.writeFileSync(process.env.SMOKE_ARGS_FILE, JSON.stringify(args));
-  console.log(JSON.stringify({
-    payload_type: "session.run.linked",
-    stream: { kind: "session", id: "01a06628-aaaa-bbbb-cccc-ddddeeeeffff" },
-    payload: {},
-  }));
-  if (process.env.SMOKE_MODE === "muse-success") {
-    console.log(JSON.stringify({
-      payload_type: "run.terminal.completed",
-      payload: { kind: "run_terminal", terminal: "completed", text: "fake muse completed" },
-    }));
-  }
-  process.exit(0);
 } else {
   process.stdin.resume();
   const grandProgram = process.env.SMOKE_GRAND_IGNORES_SIGTERM

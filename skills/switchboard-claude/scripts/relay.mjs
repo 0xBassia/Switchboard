@@ -1,0 +1,2013 @@
+#!/usr/bin/env node
+/**
+ * Switchboard · switchboard-claude · relay.mjs
+ *
+ * Dispatch a self-contained brief to a separate Claude Code CLI process
+ * (`claude -p`), capture the structured stream, and write a stable result the
+ * orchestrator can review.
+ *
+ * Trust posture: this relay makes no network calls of its own, reads or writes
+ * no credentials, sends no telemetry, and has no dependencies (Node built-ins
+ * only). It launches `claude` and uses `git status --porcelain`; on Windows it
+ * may also use cmd.exe for an npm .cmd shim and taskkill to terminate a process
+ * tree. Claude authenticates and makes its own network calls exactly as it does
+ * at the terminal.
+ *
+ * The relay never commits. Its write-capable profiles use string rules to deny
+ * common direct forms of `git commit`, `git push`, and nested `claude`, plus
+ * any command containing `switchboard-claude`. Aliases, scripts, and wrappers can
+ * bypass those speed bumps; the brief's no-commit instruction and orchestrator
+ * review remain the boundary. The orchestrator re-runs the project gates and
+ * lands the work.
+ *
+ * Normal runs use Claude's `acceptEdits` permission mode with an explicit tool
+ * surface (Read, Glob, Grep, Edit, Write, and the platform shell). On macOS,
+ * Linux, and WSL2, an inline settings file requires Claude's shell sandbox,
+ * disables its unsandboxed escape hatch, and auto-approves commands that stay
+ * sandboxed so non-interactive gates can run. That sandbox covers shell
+ * processes and their children only; merged local or managed settings can
+ * affect its effective boundary, and it is not a universal boundary around
+ * Claude Code. Native Windows has no Claude shell sandbox, so the relay
+ * pre-approves PowerShell there and documents that it is not OS-isolated.
+ *
+ * `--read-only` uses plan mode and exposes only Read, Glob, and Grep: no edit,
+ * write, shell, MCP, skill, command, or Agent tool. The relay also compares git
+ * porcelain before and after, and also fingerprints working-tree and index state for paths
+ * that were already dirty, and emits `readOnlyViolation`. This is a tripwire,
+ * not an OS boundary: it reports detected Git-visible changes, it does not prevent them. It is
+ * three-valued - `null` means coverage was incomplete (git unavailable, a
+ * submodule, an unreadable path), never "nothing happened". Git-ignored paths
+ * are outside it.
+ *
+ * Every profile disables configured MCP discovery and Claude.ai connectors,
+ * denies all MCP tools, and disables skills and commands for the child while
+ * preserving normal authentication, CLAUDE.md discovery, hooks, and the rest of
+ * the inherited environment. Hooks are outside the tool restriction and can
+ * mutate a read-only run; readOnlyViolation is the tripwire. When nested under
+ * Claude Code, the child environment removes only CLAUDECODE;
+ * CLAUDE_CODE_CHILD_SESSION and credential variables are preserved. The same
+ * environment is used for version preflight.
+ *
+ * Usage:
+ *   node relay.mjs --brief <file> [options]
+ *   cat brief.txt | node relay.mjs [options]
+ *
+ * Options:
+ *   --brief <file>                    Brief path. Omit to read the brief from stdin.
+ *   --cd <dir>                        Child cwd (default: current directory).
+ *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
+ *   --out-dir <dir>                   Artifact directory (default: system temp).
+ *   --timeout <dur>                   Relay watchdog; off by default. Use h/m/s,
+ *                                     such as 30m, 90s, or 1h30m.
+ *   --model <name>                    Claude model alias or full name.
+ *   --effort <level>                  low | medium | high | xhigh | max | ultracode
+ *   --max-turns <n>                   Positive agentic-turn limit.
+ *   --max-budget-usd <amount>         Positive decimal spend limit.
+ *   --autocompact <auto|tokens>       Set Claude's auto-compact window.
+ *                                     Requires claude 2.1.221 or newer.
+ *   --resume-last                     Map to Claude's --continue.
+ *   --session <id>                    Map to Claude's --resume <id>.
+ *                                     Mutually exclusive with --resume-last.
+ *   --read-only                       Plan mode with Read, Glob, and Grep only.
+ *   --dangerously-skip-permissions    Opt into Claude's bypassPermissions mode.
+ *   --project-settings                Also load the repository's .claude/settings.json and
+ *                                     settings.local.json (hooks included). Trusted repos only.
+ *                                     Mutually exclusive with --read-only.
+ *   -h, --help                        Show this help.
+ *
+ * Claude is always launched with:
+ *   -p --output-format stream-json --verbose
+ * The brief is sent through stdin, never argv. `--bg` and `--bare` are not used.
+ *
+ * Artifacts:
+ *   brief.txt       exact brief sent on stdin
+ *   events.jsonl    raw Claude stdout stream
+ *   final.txt       final result event's text
+ *   stderr.txt      complete Claude stderr
+ *   profile.json    inspectable per-run settings passed with --settings
+ *   result.json     switchboard-relay.result.v1
+ *
+ * Exit codes: usage errors exit 2 before result.json; a missing `claude` exits
+ * 127 with status "claude_unavailable"; otherwise the exit mirrors Claude, with
+ * a forced non-zero code for timeout or a terminal error result. Once the brief
+ * and artifact directory validate, result.json is written for completed,
+ * failed, timeout, aborted, and claude_unavailable outcomes.
+ *
+ * Native Windows launch behavior supports a directly spawned claude.exe and an
+ * npm claude.cmd shim through cmd.exe with strictly serialized arguments. The
+ * claude.cmd path has a recorded native-Windows run; a directly spawned
+ * claude.exe remains pending native-Windows verification.
+ */
+
+// GENERATED by tools/build.mjs from src/adapters/claude.mjs and src/core/.
+// Do not edit this file: edit the sources, then run `node tools/build.mjs`.
+
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
+import { accessSync, chmodSync, closeSync, constants as fsConstants, existsSync, fchmodSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { constants, tmpdir } from "node:os";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { StringDecoder } from "node:string_decoder";
+import { fileURLToPath } from "node:url";
+import { TextDecoder } from "node:util";
+
+// ---- src/core/cli.mjs
+
+function fail(message, code = 2) {
+  process.stderr.write(`relay: ${message}\n`);
+  process.exit(code);
+}
+
+
+// The relay's leading block comment doubles as --help text.
+function headerComment(fallback = "relay.mjs - dispatch a brief to an implementer CLI\n") {
+  const src = readFileSync(new URL(import.meta.url), "utf8");
+  const match = src.match(/\/\*\*([\s\S]*?)\*\//);
+  if (!match) return fallback;
+  return `${match[1].replace(/^\s*\* ?/gm, "").trim()}\n`;
+}
+
+
+// Flags every relay accepts. Adapters add their own; an adapter entry with the
+// same name replaces the common one.
+const COMMON_FLAGS = {
+  "--brief": { key: "brief" },
+  "--cd": { key: "cd", path: true },
+  "--lane": { key: "lane" },
+  "--timeout": { key: "timeout" },
+  "--out-dir": { key: "outDir", path: true },
+};
+
+
+// spec: { [flag]: { key, kind?: "value" | "bool" | "list", path?, pattern?, choices?, label? } }
+// "value" (default) takes the next argv token; "bool" sets true; "list" appends.
+// `pattern` / `choices` validate the value with a uniform error message.
+// Returns { opts, flagged } where `flagged` holds every key set explicitly.
+function parseArgs(argv, spec, defaults) {
+  const flags = { ...COMMON_FLAGS, ...spec };
+  const flagged = new Set();
+  const opts = {
+    lane: null,
+    laneSource: null,
+    brief: null,
+    cd: process.cwd(),
+    outDir: null,
+    ...defaults,
+  };
+  for (const [flag, def] of Object.entries(flags)) {
+    if (def.kind === "list" && !Array.isArray(opts[def.key])) opts[def.key] = [];
+    if (def.kind === "bool" && opts[def.key] === undefined) opts[def.key] = false;
+  }
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      process.stdout.write(headerComment());
+      process.exit(0);
+    }
+    const def = Object.hasOwn(flags, arg) ? flags[arg] : null;
+    if (!def) fail(`unknown option: ${arg}`);
+    flagged.add(def.key);
+    if (def.kind === "bool") {
+      opts[def.key] = true;
+      continue;
+    }
+    const value = argv[i + 1];
+    if (value === undefined) fail(`${arg} requires a value`);
+    // An empty path would resolve to the current directory and quietly make it the artifact dir.
+    if (value === "") fail(`${arg} requires a non-empty value`);
+    i += 1;
+    checkValue(arg, value, def);
+    const stored = def.path ? resolve(value) : value;
+    if (def.kind === "list") opts[def.key].push(stored);
+    else opts[def.key] = stored;
+  }
+  return { opts, flagged };
+}
+
+
+function checkValue(label, value, def) {
+  if (def.choices && !def.choices.includes(value)) {
+    fail(`${label} must be one of: ${def.choices.join(", ")} (got "${value}")`);
+  }
+  if (def.pattern && !def.pattern.test(value)) {
+    fail(`${label} "${value}" contains unsupported characters`);
+  }
+}
+
+
+// Fails unless at most one of the named keys is set.
+function exclusive(opts, pairs) {
+  for (const [a, b, message] of pairs) {
+    if (opts[a] && opts[b]) fail(message);
+  }
+}
+
+
+// Briefs saved by Windows PowerShell 5.1 (`>` and Out-File) are UTF-16 with a BOM;
+// decode the common BOMs instead of dispatching mojibake, and refuse NUL bytes, which
+// no CLI's argv accepts anyway.
+function decodeBrief(bytes, label) {
+  let text;
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    if ((bytes.length - 2) % 2) fail(`${label} is not valid UTF-16; save the brief as UTF-8 text`);
+    text = bytes.subarray(2).toString("utf16le");
+  } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    if ((bytes.length - 2) % 2) fail(`${label} is not valid UTF-16; save the brief as UTF-8 text`);
+    text = Buffer.from(bytes.subarray(2)).swap16().toString("utf16le");
+  } else if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    text = bytes.subarray(3).toString("utf8");
+  } else {
+    text = bytes.toString("utf8");
+  }
+  if (text.includes("\0")) fail(`${label} contains NUL bytes; save the brief as UTF-8 text`);
+  return text;
+}
+
+
+function readBrief(opts) {
+  if (opts.brief) {
+    if (!existsSync(opts.brief)) fail(`brief file not found: ${opts.brief}`);
+    let bytes;
+    try {
+      bytes = readFileSync(opts.brief);
+    } catch (error) {
+      fail(`cannot read brief file ${opts.brief}: ${error.message}`);
+    }
+    return decodeBrief(bytes, `brief file ${opts.brief}`);
+  }
+  if (process.stdin.isTTY) {
+    fail("no --brief given and stdin is a TTY; pass --brief <file> or pipe the brief on stdin");
+  }
+  let bytes;
+  try {
+    bytes = readFileSync(0);
+  } catch {
+    return "";
+  }
+  return decodeBrief(bytes, "the brief on stdin");
+}
+
+// ---- src/core/duration.mjs
+
+const MAX_TIMER_MS = 2_147_483_647;
+
+
+function parseDuration(duration) {
+  const match = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(duration);
+  if (!match || (!match[1] && !match[2] && !match[3])) return null;
+  try {
+    const seconds =
+      BigInt(match[1] || 0) * 3600n +
+      BigInt(match[2] || 0) * 60n +
+      BigInt(match[3] || 0);
+    const milliseconds = seconds * 1000n;
+    if (milliseconds <= 0n || milliseconds > BigInt(MAX_TIMER_MS)) return null;
+    return Number(milliseconds);
+  } catch {
+    return null;
+  }
+}
+
+// ---- src/core/proc.mjs
+
+const IS_WIN = process.platform === "win32";
+
+
+// Windows looks for a bare command in the current directory before PATH: cmd.exe
+// always, CreateProcess unless this variable is set. The --cd checkout is untrusted,
+// so it must never get to supply `git`, `taskkill` or the implementer itself. The
+// implementer inherits it, which is the safe default there too.
+// POSIX lookup treats an empty or relative PATH entry (a stray ":" from PATH=$X:$PATH)
+// as a directory relative to the child's cwd, which is the untrusted --cd checkout, so
+// only absolute entries are kept, for the relay and everything it starts.
+function guardExePath() {
+  if (IS_WIN && !process.env.NoDefaultCurrentDirectoryInExePath) process.env.NoDefaultCurrentDirectoryInExePath = "1";
+  for (const key of Object.keys(process.env).filter((name) => name.toUpperCase() === "PATH")) {
+    const entries = process.env[key].split(IS_WIN ? ";" : ":");
+    const kept = entries.filter((entry) => isAbsolute(entry.replace(/^"(.*)"$/, "$1")));
+    if (kept.length !== entries.length) process.env[key] = kept.join(IS_WIN ? ";" : ":");
+  }
+}
+
+
+function signalExitCode(signal, fallback = 15) {
+  return 128 + (constants.signals[signal] || fallback);
+}
+
+
+function killChild(child, signal = "SIGTERM") {
+  if (!child || !child.pid) return;
+  if (process.platform === "win32") {
+    if (signal !== "SIGTERM") return;
+    guardExePath();
+    try {
+      execFileSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+        stdio: ["ignore", "ignore", "inherit"],
+      });
+    } catch {
+      // The process tree already exited.
+    }
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // The process group already exited.
+    }
+  }
+}
+
+
+// launch: { command, args, shell?, verbatim?, env?, cwd?, stdin? }
+// POSIX children lead a new process group so killChild reaches grandchildren.
+// With `shell` the command line is serialized once (Node 24 warns on shell:true
+// plus an args array); callers must pass only token-validated or quoted args.
+function spawnLaunch(launch, extra = {}) {
+  guardExePath();
+  const options = {
+    cwd: launch.cwd,
+    env: IS_WIN ? { NoDefaultCurrentDirectoryInExePath: "1", ...(launch.env || process.env) } : (launch.env || process.env),
+    stdio: [launch.stdin === undefined || launch.stdin === null ? "ignore" : "pipe", "pipe", "pipe"],
+    detached: !IS_WIN,
+    windowsHide: true,
+    ...(launch.verbatim ? { windowsVerbatimArguments: true } : {}),
+    ...extra,
+  };
+  if (launch.shell) return spawn([launch.command, ...launch.args].join(" "), { ...options, shell: true });
+  return spawn(launch.command, launch.args, options);
+}
+
+
+// Runs `launch` to completion with a hard deadline and resolves with
+// { version, error }. `version` is null with no error when the binary is
+// missing; any other failure is an error, shaped like execFileSync's
+// (code: "ETIMEDOUT" | status | stderr), so a broken CLI is never dispatched to.
+function probeVersion(launch, timeoutMs, { parse = (out) => out.trim(), onChild, missing } = {}) {
+  return new Promise((done) => {
+    let child;
+    try {
+      child = spawnLaunch({ ...launch, stdin: null });
+    } catch (error) {
+      done({ version: null, error: error.code === "ENOENT" ? null : error });
+      return;
+    }
+    if (onChild) onChild(child);
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let finished = false;
+    const finish = (value) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (onChild) onChild(null);
+      done(value);
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killChild(child, IS_WIN ? "SIGTERM" : "SIGKILL");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      // If the kill cannot land, "close" may never fire; do not wait on it.
+      setTimeout(() => finish({ version: null, error: Object.assign(new Error("version probe timed out"), { code: "ETIMEDOUT", stderr }) }), 2_000).unref();
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { if (stdout.length < 65_536) stdout += chunk; });
+    child.stderr.on("data", (chunk) => { if (stderr.length < 65_536) stderr += chunk; });
+    child.on("error", (error) => {
+      finish({ version: null, error: error.code === "ENOENT" ? null : error });
+    });
+    child.on("close", (code, signal) => {
+      if (timedOut) {
+        finish({ version: null, error: Object.assign(new Error("version probe timed out"), { code: "ETIMEDOUT", stderr }) });
+        return;
+      }
+      if (missing && missing(code, stderr)) {
+        finish({ version: null, error: null });
+        return;
+      }
+      if (code !== 0) {
+        finish({ version: null, error: Object.assign(new Error(`version probe exited ${code ?? signal}`), { status: code, signal, stderr }) });
+        return;
+      }
+      finish({ version: parse(stdout, stderr) || "unknown", error: null });
+    });
+  });
+}
+
+// ---- src/core/git.mjs
+
+function hardenGit() {
+  const count = Number(process.env.GIT_CONFIG_COUNT) || 0;
+  for (let i = 0; i < count; i += 1) {
+    if (process.env[`GIT_CONFIG_KEY_${i}`] === "core.fsmonitor" && process.env[`GIT_CONFIG_VALUE_${i}`] === "") return;
+  }
+  process.env[`GIT_CONFIG_KEY_${count}`] = "core.fsmonitor";
+  process.env[`GIT_CONFIG_VALUE_${count}`] = "";
+  process.env.GIT_CONFIG_COUNT = String(count + 1);
+}
+
+
+// Settings that make status, ls-files, diff or hash-object run a program, from any
+// scope and any included file (--includes), each with the file it came from.
+const COMMAND_KEYS = "^(core\\.(fsmonitor|hookspath|worktree|attributesfile|pager|editor|sshcommand|gitproxy)|filter\\.|diff\\.[^.]+\\.(command|textconv)|merge\\.[^.]+\\.driver|include\\.|includeif\\.)";
+
+
+let pinned = null;
+
+let lastError = null;
+
+
+function plainGit(cwd, args) {
+  guardExePath();
+  hardenGit();
+  return execFileSync("git", args, {
+    cwd, encoding: "utf8", timeout: 10_000, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "ignore"],
+  }).replace(/\r?\n$/, "");
+}
+
+
+// The command-running settings as git resolves them for the pinned repository, plus
+// each registered submodule's gitdir pointer (where a submodule's own config lives).
+function commandSurface(gitDir, workTree) {
+  const hash = createHash("sha256");
+  try {
+    hash.update(execFileSync("git", ["--git-dir", gitDir, "--work-tree", workTree, "config", "--includes", "--show-origin", "--null", "--get-regexp", COMMAND_KEYS], {
+      cwd: workTree, timeout: 10_000, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "ignore"],
+    }));
+  } catch (error) {
+    // Exit 1 is "no such keys"; anything else means git could not say.
+    if (error?.status !== 1) return null;
+  }
+  try {
+    const stage = execFileSync("git", ["--git-dir", gitDir, "--work-tree", workTree, "ls-files", "--stage", "-z"], {
+      cwd: workTree, encoding: "utf8", timeout: 10_000, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024,
+    });
+    for (const field of stage.split("\0")) {
+      if (!field.startsWith("160000 ")) continue;
+      const pointer = join(workTree, field.slice(field.indexOf("\t") + 1), ".git");
+      hash.update("\0submodule\0").update(pointer).update("\0");
+      try { hash.update(readFileSync(pointer)); } catch (error) { hash.update(`<${error.code || "unreadable"}>`); }
+    }
+  } catch { /* no index yet */ }
+  return hash.digest("hex");
+}
+
+
+// Called once before dispatch. A --cd outside any repository pins "no repository":
+// a repository the implementer creates there later is never consulted.
+function pinGitRepository(cwd) {
+  const at = resolve(cwd);
+  lastError = null;
+  try {
+    const gitDir = plainGit(at, ["rev-parse", "--absolute-git-dir"]);
+    const workTree = plainGit(at, ["rev-parse", "--show-toplevel"]);
+    pinned = { cwd: at, gitDir, workTree, surface: commandSurface(gitDir, workTree) };
+  } catch {
+    pinned = { cwd: at, gitDir: null };
+  }
+  return pinned;
+}
+
+
+// True when nothing was pinned or no command-running setting changed since the pin.
+function gitPinIntact() {
+  if (!pinned || pinned.gitDir === null) return true;
+  const now = commandSurface(pinned.gitDir, pinned.workTree);
+  return now !== null && now === pinned.surface;
+}
+
+
+// Why the last git call refused or failed, for the result; null after a success.
+function lastGitError() {
+  return lastError;
+}
+
+
+function insidePinned(cwd) {
+  if (!pinned) return false;
+  const within = (r) => r === "" || (!r.startsWith("..") && !isAbsolute(r));
+  if (within(relative(pinned.cwd, resolve(cwd)))) return true;
+  return Boolean(pinned.workTree) && within(relative(pinned.workTree, resolve(cwd)));
+}
+
+
+// git for the run's repository. Throws when git cannot report safely; callers turn
+// that into "unknown" (null), never into a clean answer.
+function runGit(cwd, args, options = {}) {
+  guardExePath();
+  hardenGit();
+  let full = args;
+  if (insidePinned(cwd)) {
+    if (pinned.gitDir === null) {
+      lastError = "--cd was not inside a git repository when the run started";
+      throw new Error(lastError);
+    }
+    if (!gitPinIntact()) {
+      lastError = "a git setting that can run commands changed during the run, so git was not asked";
+      throw new Error(lastError);
+    }
+    full = ["--git-dir", pinned.gitDir, "--work-tree", pinned.workTree, ...args];
+  }
+  try {
+    const output = execFileSync("git", full, {
+      cwd, timeout: 10_000, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024, ...options,
+    });
+    lastError = null;
+    return output;
+  } catch (error) {
+    lastError = error?.code === "ETIMEDOUT" || error?.signal === "SIGKILL" ? "git did not answer within 10 seconds" : "git could not report";
+    throw error;
+  }
+}
+
+
+// `git status --porcelain` lines for the working tree, or null when git cannot
+// report (not a repository, git missing, a hung probe, a changed command setting).
+function gitTouchedFiles(cwd) {
+  try {
+    const output = runGit(cwd, ["status", "--porcelain"], { encoding: "utf8" });
+    return output.split("\n").map((line) => line.trimEnd()).filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+// ---- src/core/lane.mjs
+
+const LANE_CONFLICTS = {
+  autonomy: ["autonomy", "sandbox", "readOnly"],
+  agent: ["agent", "readOnly"],
+  sandbox: ["sandbox", "readOnly"],
+  permissionMode: ["permissionMode", "readOnly"],
+  planOnly: ["planOnly", "readOnly"],
+  readOnly: ["readOnly"],
+};
+
+
+function applyFleetLane(opts, flagged, implementer, { conflicts = {}, onDial } = {}) {
+  if (!opts.lane) return;
+  const script = join(dirname(fileURLToPath(import.meta.url)), "../../switchboard-setup/scripts/lane.mjs");
+  if (!existsSync(script)) {
+    fail("--lane requires the switchboard-setup skill installed beside this relay");
+  }
+  const r = spawnSync(
+    process.execPath,
+    [script, "resolve", "--cwd", opts.cd, "--lane", opts.lane, "--implementer", implementer],
+    { encoding: "utf8", env: process.env, timeout: 30_000, killSignal: "SIGKILL" },
+  );
+  if (r.error) fail(`lane resolve failed: ${r.error.message}`);
+  if (r.status !== 0) {
+    fail((r.stderr || "lane resolve failed").trim().replace(/^lane\.mjs:\s*/, ""));
+  }
+  let resolved;
+  try {
+    const lines = (r.stdout || "").trim().split("\n").filter(Boolean);
+    resolved = JSON.parse(lines[lines.length - 1]);
+  } catch {
+    fail("lane resolve returned invalid JSON");
+  }
+  opts.laneSource = resolved.source;
+  const table = { ...LANE_CONFLICTS, ...conflicts };
+  for (const [field, value] of Object.entries(resolved.dials || {})) {
+    const deciders = table[field] || [field];
+    if (deciders.some((key) => flagged.has(key))) continue;
+    opts[field] = value;
+    if (onDial) onDial(field, value, opts);
+  }
+}
+
+// ---- src/core/run.mjs
+
+const RESULT_SCHEMA = "switchboard-relay.result.v1";
+
+
+function timestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+
+// Briefs and transcripts can hold sensitive context, so artifacts are private:
+// the default directory is a fresh 0700 mkdtemp and every file is 0600.
+const PRIVATE_FILE = 0o600;
+
+
+// Removes `path` only when its directory holds an entry with exactly that
+// name. On a case-insensitive filesystem rmSync("final.txt") would otherwise
+// delete a user's FINAL.TXT sitting in an in-repo --out-dir.
+function removeExact(path) {
+  let entries;
+  try { entries = readdirSync(dirname(path)); } catch { return; }
+  if (entries.includes(basename(path))) rmSync(path, { force: true });
+}
+
+
+// Unlink, then create exclusively: a stale symlink at an artifact path is
+// removed, never written through, and a case-aliased user file makes the
+// create fail rather than be overwritten.
+function writePrivate(path, data) {
+  removeExact(path);
+  writeFileSync(path, data, { encoding: "utf8", mode: PRIVATE_FILE, flag: "wx" });
+  try { chmodSync(path, PRIVATE_FILE); } catch { /* best effort on filesystems without modes */ }
+}
+
+
+// Creates an artifact exclusively and keeps it open: every later write goes through
+// the descriptor, so an entry swapped mid-run (a link planted by the implementer)
+// can never redirect it. "wx+" so the same descriptor serves the stderr tail.
+function openPrivate(path) {
+  removeExact(path);
+  const fd = openSync(path, "wx+", PRIVATE_FILE);
+  try { fchmodSync(fd, PRIVATE_FILE); } catch { /* best effort on filesystems without modes */ }
+  return fd;
+}
+
+
+// Artifacts the implementer writes itself (codex's final.txt) get the
+// relay's own mode once it has exited. Links are left alone: chmod would follow them.
+function privatizeArtifacts(run) {
+  for (const path of runArtifactPaths(run)) {
+    try {
+      if (lstatSync(path).isFile()) chmodSync(path, PRIVATE_FILE);
+    } catch { /* absent, or a filesystem without modes */ }
+  }
+}
+
+
+// extra: { pathKey: fileName } for adapter-specific artifacts (profile.json, ...).
+function prepareRunDir(opts, brief, extra = {}) {
+  let outDir = opts.outDir;
+  try {
+    if (outDir) {
+      mkdirSync(outDir, { recursive: true, mode: 0o700 });
+    } else {
+      const parent = join(tmpdir(), "switchboard-relay");
+      mkdirSync(parent, { recursive: true, mode: 0o700 });
+      outDir = mkdtempSync(join(parent, `${basename(opts.cd) || "repo"}-${timestamp()}-`));
+    }
+  } catch (error) {
+    fail(`cannot create the artifact directory ${outDir || tmpdir()}: ${error.message}`);
+  }
+  const run = {
+    outDir,
+    startedAt: new Date().toISOString(),
+    briefPath: join(outDir, "brief.txt"),
+    finalPath: join(outDir, "final.txt"),
+    eventsPath: join(outDir, "events.jsonl"),
+    stderrPath: join(outDir, "stderr.txt"),
+    resultPath: join(outDir, "result.json"),
+  };
+  for (const [key, name] of Object.entries(extra)) run[key] = join(outDir, name);
+  try {
+    // A reused --out-dir must not leak a previous run's report or result.
+    removeExact(run.finalPath);
+    removeExact(run.resultPath);
+    writePrivate(run.briefPath, brief);
+    run.eventsFd = openPrivate(run.eventsPath);
+    run.stderrFd = openPrivate(run.stderrPath);
+  } catch (error) {
+    fail(`cannot write run artifacts in ${outDir}: ${error.message}`);
+  }
+  return run;
+}
+
+
+// Publish atomically so a polling orchestrator never reads a half-written file.
+// The temp name is unpredictable and created exclusively ("wx"), so a symlink
+// planted at it cannot redirect the write; rename replaces a link, never follows it.
+function writeAtomic(path, text) {
+  const temporary = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
+  writeFileSync(temporary, text, { encoding: "utf8", mode: PRIVATE_FILE, flag: "wx" });
+  renameSync(temporary, path);
+}
+
+
+function writeJsonAtomic(path, value) {
+  writeAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+
+function runArtifactPaths(run) {
+  return Object.entries(run).filter(([key]) => key.endsWith("Path")).map(([, path]) => path);
+}
+
+
+// fields(): the run's configuration and live state, re-read on every write.
+// finish(result): last-moment additions (the read-only verdict).
+function makeResultWriter(base, run, fields, finish) {
+  return (outcome) => {
+    const result = {
+      schema: RESULT_SCHEMA,
+      ...base,
+      ...fields(),
+      startedAt: run.startedAt,
+      finishedAt: new Date().toISOString(),
+      briefPath: run.briefPath,
+      finalPath: existsSync(run.finalPath) ? run.finalPath : null,
+      eventsPath: run.eventsPath,
+      stderrPath: run.stderrPath,
+      ...outcome,
+    };
+    if (finish) finish(result);
+    writeJsonAtomic(run.resultPath, result);
+    return result;
+  };
+}
+
+
+const MAX_STDERR_TAIL_BYTES = 64 * 1024;
+
+
+// The last 20 non-blank lines within the final 64 KiB of stderr.txt. A line cut
+// by the window is marked, and a cut multibyte character is skipped, so the
+// tail stays bounded and valid however long a single line is. `source` is the
+// relay's own descriptor (never a path the implementer could have re-pointed)
+// or, for a finished run, a path.
+function readStderrTail(source) {
+  const owned = typeof source !== "number";
+  let fd;
+  try {
+    fd = owned ? openSync(source, "r") : source;
+    const size = fstatSync(fd).size;
+    const start = Math.max(0, size - MAX_STDERR_TAIL_BYTES);
+    const readStart = Math.max(0, start - 1);
+    const buffer = Buffer.alloc(size - readStart);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const count = readSync(fd, buffer, bytesRead, buffer.length - bytesRead, readStart + bytesRead);
+      if (count === 0) break;
+      bytesRead += count;
+    }
+    let offset = start - readStart;
+    // The preceding byte distinguishes a cut line from a line starting at the window boundary.
+    const partialLine = offset > 0 && buffer[0] !== 0x0a;
+    while (partialLine && offset < bytesRead && (buffer[offset] & 0xc0) === 0x80) offset += 1;
+    const lines = buffer.subarray(offset, bytesRead).toString("utf8").split(/\r?\n/).map((line) => line.trimEnd());
+    if (partialLine && lines[0]?.trim()) lines[0] = `[truncated; read stderrPath] ${lines[0]}`;
+    return lines.filter((line) => line.trim()).slice(-20);
+  } catch {
+    // A missing or unreadable diagnostic must not prevent the result from being published.
+    return [];
+  } finally {
+    if (owned && fd !== undefined) closeSync(fd);
+  }
+}
+
+
+const MAX_LISTED_FILES = 40;
+
+
+// view: { name, versionField, lines?(result) => string[], report?, empty? }
+function printSummary(result, resultPath, view) {
+  const lines = [""];
+  lines.push(`relay: ${result.status} (exit ${result.exitCode}${result.signal ? `, killed by ${result.signal}` : ""})  ·  ${view.name} ${result[view.versionField] ?? "?"}`);
+  if (view.readOnly && result.readOnlyViolation === true) {
+    lines.push("warning: a git-visible change was detected during this --read-only run; inspect the working tree immediately.");
+  } else if (view.readOnly && result.readOnlyViolation === null) {
+    lines.push("warning: this --read-only tripwire had incomplete coverage; inspect the working tree directly.");
+  }
+  if (result.signal === "SIGKILL" && result.status === "failed") {
+    lines.push(`hint: the host killed the process (commonly the OOM killer or a supervisor timeout) — this is not a ${view.name} error; check host memory and re-dispatch, or split the task into smaller briefs.`);
+  }
+  if (result.signal === "SIGTERM" && result.status === "failed") {
+    lines.push(`hint: something outside the relay terminated ${view.name} (a supervisor, the session ending, or a manual kill) — when the relay itself does the killing it reports status "timeout" or "aborted" instead; inspect the working tree before re-dispatching.`);
+  }
+  if (result.resumed) lines.push("mode: resumed an existing session");
+  if (result.sessionId) {
+    lines.push(view.resumeFlag === false
+      ? `session id: ${result.sessionId}`
+      : `session id (resume with: ${view.resumeFlag || "--session"} ${result.sessionId}): ${result.sessionId}`);
+  }
+  if (view.lines) lines.push(...view.lines(result));
+  if (result.tokens) {
+    const parts = [`in ${result.tokens.input ?? "?"}`, `out ${result.tokens.output ?? "?"}`];
+    if (result.tokens.cacheRead !== null) parts.push(`cache read ${result.tokens.cacheRead}`);
+    if (result.tokens.reasoning !== null) parts.push(`reasoning ${result.tokens.reasoning}`);
+    lines.push(`tokens: ${parts.join(", ")}`);
+  }
+  if (typeof result.totalCostUsd === "number") lines.push(`cost: $${result.totalCostUsd}`);
+  const touched = result.touchedFiles;
+  if (touched === null || touched === undefined) {
+    lines.push("touched files: git unavailable - inspect the working tree directly");
+  } else {
+    lines.push(`touched files: ${touched.length}`);
+    for (const file of touched.slice(0, MAX_LISTED_FILES)) lines.push(`  ${file}`);
+    if (touched.length > MAX_LISTED_FILES) lines.push(`  ... and ${touched.length - MAX_LISTED_FILES} more`);
+  }
+  if (result.error) lines.push(`error: ${result.error}`);
+  if (result.stderrTail && result.stderrTail.length) {
+    lines.push("last stderr:");
+    for (const line of result.stderrTail.slice(-8)) lines.push(`  ${line}`);
+  }
+  lines.push("");
+  lines.push(`--- ${view.name} final report ---`);
+  lines.push(result.finalMessage || view.empty || "(no final message captured)");
+  lines.push("--- end report ---");
+  lines.push("");
+  lines.push(`result: ${resultPath}`);
+  lines.push("relay does not commit. Review the diff, re-run the project gates yourself, then commit from the orchestrator.");
+  process.stdout.write(`${lines.join("\n")}\n`);
+}
+
+// ---- src/core/relay.mjs
+
+const RELAY_SIGNALS = ["SIGTERM", "SIGINT", "SIGHUP"];
+
+const SIGKILL_GRACE_MS = 10_000;
+
+const ABORT_GRACE_MS = 2_000;
+
+const DRAIN_GRACE_MS = 500;
+
+const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
+
+
+const finiteOrNull = (value) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null);
+
+
+// Adapters return whatever counts their CLI reports; anything missing or
+// malformed becomes null, and no counts at all means `tokens: null`.
+function normalizeTokens(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const tokens = {
+    input: finiteOrNull(raw.input),
+    output: finiteOrNull(raw.output),
+    cacheRead: finiteOrNull(raw.cacheRead),
+    cacheWrite: finiteOrNull(raw.cacheWrite),
+    reasoning: finiteOrNull(raw.reasoning),
+  };
+  return Object.values(tokens).some((value) => value !== null) ? tokens : null;
+}
+
+
+// lstat, not existsSync: a dangling symlink is still an entry someone put there.
+function entryExists(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+function checkDirectories(opts) {
+  let cd;
+  try { cd = statSync(opts.cd); } catch { fail(`--cd directory not found: ${opts.cd}`); }
+  if (!cd.isDirectory()) fail(`--cd is not a directory: ${opts.cd}`);
+  if (opts.outDir && existsSync(opts.outDir) && !statSync(opts.outDir).isDirectory()) {
+    fail(`--out-dir is not a directory: ${opts.outDir}`);
+  }
+}
+
+
+function onRelaySignals(handler) {
+  const handlers = RELAY_SIGNALS.map((signal) => [signal, () => handler(signal)]);
+  for (const [signal, fn] of handlers) process.on(signal, fn);
+  return () => {
+    for (const [signal, fn] of handlers) process.removeListener(signal, fn);
+  };
+}
+
+
+// See src/README.md for the adapter contract.
+async function runRelay(a) {
+  hardenGit();
+  const name = a.name || a.key;
+  // Result identity (`tool`, `<slug>_unavailable`) can differ from the lane key.
+  const slug = a.slug || a.key;
+  const unavailableStatus = `${slug.replace(/-/g, "_")}_unavailable`;
+  const { opts, flagged } = parseArgs(process.argv.slice(2), a.flags || {}, { timeout: null, ...a.defaults });
+  applyFleetLane(opts, flagged, a.key, { conflicts: a.laneConflicts, onDial: a.onDial });
+  if (opts.timeout !== null && parseDuration(opts.timeout) === null) {
+    fail(`--timeout "${opts.timeout}" is invalid or too long; use a positive h/m/s duration no longer than about 24 days`);
+  }
+  checkDirectories(opts);
+  if (a.validate) a.validate(opts, flagged);
+
+  const brief = readBrief(opts);
+  if (!brief.trim()) fail("empty brief (pass --brief <file> or pipe the brief on stdin)");
+  if (a.checkBrief) a.checkBrief(brief, opts);
+  if (a.maxBriefBytes) {
+    const bytes = Buffer.byteLength(brief, "utf8");
+    if (bytes > a.maxBriefBytes) fail(a.briefTooLarge(Math.round(bytes / 1024)));
+  }
+
+  const run = prepareRunDir(opts, brief, a.artifacts);
+  const state = { sessionId: null, ...(a.state ? a.state(opts) : {}) };
+  const timeoutMs = opts.timeout === null ? null : parseDuration(opts.timeout);
+  let version = null;
+  // Armed before the synchronous Git baseline: a signal that lands during it is
+  // queued and handled right after, so it still produces a result instead of
+  // the default instant death.
+  let probeChild = null;
+  // An abort before dispatch never compares a meaningful "after" state, and a
+  // terminal ^C reaches the Git baseline too: the verdict is unknown, never false.
+  let verdictKnown = true;
+  // While an aborted implementer is still exiting, any verdict would be a guess.
+  const verdictGate = { pending: false };
+  const releasePreflight = onRelaySignals((signal) => {
+    releasePreflight();
+    verdictKnown = false;
+    const result = report({
+      status: "aborted",
+      exitCode: signalExitCode(signal),
+      signal,
+      finalMessage: "",
+      error: `the relay was killed by ${signal} during the ${name} version preflight; ${name} was not dispatched`,
+    });
+    if (probeChild) killChild(probeChild, IS_WIN ? "SIGTERM" : "SIGKILL");
+    process.exit(result.exitCode);
+  });
+  // Before dispatch: the repository every later git call is held to.
+  pinGitRepository(opts.cd);
+  const snapshot = a.tripwire && a.readOnly(opts) ? a.tripwire.snapshot(opts.cd, runArtifactPaths(run), a.tripwireIgnore) : null;
+
+  const write = makeResultWriter(
+    { lane: opts.lane, laneSource: opts.laneSource, tool: slug, workdir: opts.cd },
+    run,
+    () => ({
+      ...a.fields(opts, state, run),
+      [a.versionField]: version,
+      sessionId: state.sessionId,
+      // One usage shape for every implementer; null where the CLI does not report it.
+      tokens: normalizeTokens(a.tokens ? a.tokens(state) : null),
+      totalCostUsd: finiteOrNull(a.cost ? a.cost(state) : null),
+    }),
+    snapshot ? (result) => { result.readOnlyViolation = verdictKnown && !verdictGate.pending ? a.tripwire.check(snapshot) : null; } : null,
+  );
+  const view = {
+    name,
+    versionField: a.versionField,
+    lines: a.summary,
+    empty: a.emptyReport,
+    resumeFlag: a.resumeFlag,
+    // Tripwire warnings belong to read-only runs only; a write-capable run may
+    // still carry `readOnlyViolation: null` for schema stability.
+    readOnly: Boolean(snapshot) || Boolean(a.readOnly && a.readOnly(opts)),
+  };
+  const touched = () => {
+    const files = gitTouchedFiles(opts.cd);
+    return files && a.touched ? a.touched(files) : files;
+  };
+  // prepareRunDir removed any stale final.txt, so one that exists now and was
+  // not written by the relay appeared during the run (a user file renamed into
+  // an in-repo --out-dir, say). It is never replaced; the run fails instead.
+  let finalOwned = false;
+  // An adapter whose CLI writes final.txt itself (finalByImplementer) owns it.
+  const finalBlocked = () => !a.finalByImplementer && !finalOwned && entryExists(run.finalPath);
+  const finalMessage = () => {
+    const message = a.final ? a.final(state) : "";
+    if (message && !a.finalByImplementer && !finalBlocked()) {
+      // Atomic: a symlink planted at final.txt mid-run is replaced, never written through.
+      try {
+        writeAtomic(run.finalPath, message);
+        finalOwned = true;
+      } catch { /* report it inline anyway */ }
+    }
+    return message;
+  };
+  const report = (outcome) => {
+    const touchedFiles = touched();
+    // Say why touchedFiles is null rather than leave the orchestrator to guess.
+    const gitError = touchedFiles === null ? lastGitError() : null;
+    const result = write({ finalMessage: finalMessage(), touchedFiles, ...(gitError ? { gitError } : {}), ...outcome });
+    printSummary(result, run.resultPath, view);
+    return result;
+  };
+
+  // Last line of defence: a bug in an adapter hook must still leave a result and
+  // must not orphan the implementer's process group.
+  const crash = (error) => {
+    killChild(guard.child, IS_WIN ? "SIGTERM" : "SIGKILL");
+    try {
+      report({ status: "failed", exitCode: 1, signal: null, error: `relay internal error: ${error && error.stack ? error.stack : error}` });
+    } catch {
+      process.stderr.write(`relay: internal error: ${error && error.stack ? error.stack : error}\n`);
+    }
+    process.exit(1);
+  };
+  const guard = { child: null };
+  // A closed stdout/stderr (the orchestrator went away) must not turn into a
+  // crash that overwrites the real outcome: result.json is the contract.
+  for (const stream of [process.stdout, process.stderr]) stream.on("error", () => {});
+  process.on("uncaughtException", crash);
+  process.on("unhandledRejection", crash);
+
+  // Preflight: prove the CLI exists and answers before sending it the brief.
+  const probe = a.version ? a.version(opts) : null;
+  const unavailable = () => {
+    const result = report({
+      status: unavailableStatus,
+      exitCode: 127,
+      signal: null,
+      finalMessage: "",
+      error: `\`${a.binary || a.key}\` was not found on PATH; nothing was dispatched`,
+    });
+    process.stderr.write(`relay: \`${a.binary || a.key}\` not found on PATH.${a.unavailableHint ? ` ${a.unavailableHint}` : ""}\n`);
+    process.exit(result.exitCode);
+  };
+  if (probe && probe.unavailable) unavailable();
+  if (probe) {
+    const probeTimeoutMs = probe.timeoutMs ?? Math.min(timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS, DEFAULT_PROBE_TIMEOUT_MS);
+    const outcome = await probeVersion({ cwd: opts.cd, ...probe.launch }, probeTimeoutMs, {
+      parse: probe.parse,
+      missing: probe.missing,
+      onChild: (child) => { probeChild = child; guard.child = child; },
+    });
+    version = outcome.version;
+    if (!outcome.version && !outcome.error) unavailable();
+    if (outcome.error) {
+      const error = outcome.error;
+      const timedOut = error.code === "ETIMEDOUT";
+      const stderr = String(error.stderr || "").trim();
+      if (stderr) writeSync(run.stderrFd, `${stderr}\n`);
+      const message = timedOut
+        ? `${name} --version preflight timed out after ${probeTimeoutMs}ms; ${name} was not dispatched`
+        : `${name} --version preflight failed${Number.isInteger(error.status) ? ` with exit ${error.status}` : ""}; ${name} was not dispatched`;
+      const result = report({
+        status: timedOut ? "timeout" : "failed",
+        exitCode: timedOut ? 124 : Number.isInteger(error.status) && error.status !== 0 ? error.status : 1,
+        signal: null,
+        finalMessage: "",
+        stderrTail: readStderrTail(run.stderrFd),
+        error: message,
+      });
+      process.stderr.write(`relay: ${message}\n`);
+      process.exit(result.exitCode);
+    }
+  }
+
+  if (a.prepare) await a.prepare(opts, run, state, brief);
+  releasePreflight();
+  supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard, probed: Boolean(probe), unavailableStatus, finalBlocked, verdictGate });
+}
+
+
+function supervise(a, { name, opts, brief, run, state, timeoutMs, report, guard, probed, unavailableStatus, finalBlocked, verdictGate }) {
+  let launch;
+  let child;
+  try {
+    launch = { cwd: opts.cd, ...a.launch(opts, brief, run, state) };
+    // cmd.exe cannot start in a UNC directory: it falls back to %SystemRoot% with a
+    // warning, and the brief would run there while the report names the share.
+    if (IS_WIN && (launch.shell || /(^|[\\/])cmd\.exe$/i.test(launch.command))) {
+      if (/^\\\\[^?.\\]/.test(launch.cwd)) {
+        throw new Error(`--cd is a UNC path and ${name} launches through cmd.exe, which cannot run in one; map the share to a drive letter first`);
+      }
+      // Paths reach cmd.exe inside quotes, where %VAR% and !VAR! still expand.
+      if ([opts.cd, run.outDir].some((path) => /[\0\r\n"%!]/.test(path))) {
+        throw new Error(`${name} launches through cmd.exe, which would rewrite %, ! or a quote in --cd or --out-dir; use a path without them`);
+      }
+    }
+    child = spawnLaunch(launch);
+    guard.child = child;
+  } catch (error) {
+    const result = report({ status: "failed", exitCode: 1, signal: null, error: error.message || String(error) });
+    process.exit(result.exitCode);
+  }
+
+  // A handler that throws on one odd event must neither kill a good run nor
+  // vanish: the run continues and result.json lists what went wrong.
+  const eventErrors = [];
+  const guarded = (fn) => (value) => {
+    try {
+      fn(value);
+    } catch (error) {
+      if (eventErrors.length < 5) eventErrors.push(String(error && error.message ? error.message : error));
+    }
+  };
+  const parse = a.scanner
+    ? a.scanner(guarded((event) => a.onEvent(event, state, run)))
+    : guarded((text) => { if (text && a.onText) a.onText(text, state, run); });
+  const reportRun = (outcome) => report(eventErrors.length ? { ...outcome, eventErrors } : outcome);
+  // Files get the raw bytes; only in-memory parsing is decoded, across chunk
+  // boundaries so a split multibyte character cannot corrupt the report.
+  const stdoutDecoder = new StringDecoder("utf8");
+  const stderrDecoder = new StringDecoder("utf8");
+  let lastActivity = Date.now();
+  // Through the descriptors opened at start, never by path: the implementer cannot
+  // re-point an artifact mid-run.
+  child.stdout.on("data", (chunk) => {
+    lastActivity = Date.now();
+    writeSync(run.eventsFd, chunk);
+    parse(stdoutDecoder.write(chunk));
+  });
+  child.stderr.on("data", (chunk) => {
+    lastActivity = Date.now();
+    process.stderr.write(chunk);
+    writeSync(run.stderrFd, chunk);
+    const text = stderrDecoder.write(chunk);
+    if (a.onStderr) a.onStderr(text, state);
+  });
+
+  let settled = false;
+  let watchdogFired = false;
+  let stallFired = false;
+  let watchdogTimer = null;
+  let sigkillTimer = null;
+  let stallPoll = null;
+  const dropPipes = () => {
+    child.stdout.destroy();
+    child.stderr.destroy();
+  };
+  const disarm = () => {
+    if (watchdogTimer) clearTimeout(watchdogTimer);
+    if (sigkillTimer) clearTimeout(sigkillTimer);
+    if (stallPoll) clearInterval(stallPoll);
+  };
+  // Signal handlers stay installed after settling: a repeat signal during the
+  // abort grace must be ignored, not fall through to the default (instant death).
+  const settle = () => {
+    if (settled) return false;
+    settled = true;
+    disarm();
+    return true;
+  };
+
+  const fireWatchdog = () => {
+    if (watchdogFired || settled) return;
+    watchdogFired = true;
+    if (stallPoll) clearInterval(stallPoll);
+    child.once("exit", dropPipes);
+    killChild(child);
+    sigkillTimer = setTimeout(() => {
+      if (!settled) killChild(child, "SIGKILL");
+    }, SIGKILL_GRACE_MS);
+  };
+  if (timeoutMs !== null) watchdogTimer = setTimeout(fireWatchdog, timeoutMs);
+
+  // Stall watchdog (opt-in per adapter): output is activity, and the clock
+  // pauses while the adapter reports work in flight (a long silent tool call).
+  // It catches an implementer that is alive but stuck, long before --timeout.
+  const stallMs = a.stall ? a.stall.ms(opts) : null;
+  if (stallMs) {
+    stallPoll = setInterval(() => {
+      if (watchdogFired || settled) return;
+      if (a.stall.busy && a.stall.busy(state)) lastActivity = Date.now();
+      else if (Date.now() - lastActivity >= stallMs) {
+        stallFired = true;
+        fireWatchdog();
+      }
+    }, Math.min(5_000, Math.max(250, Math.floor(stallMs / 4))));
+  }
+
+  // The relay's own death must still produce a result, and must take the
+  // implementer with it. SIGTERM/SIGHUP registration is a no-op on Windows.
+  onRelaySignals((signal) => {
+    if (!settle()) return;
+    child.once("exit", dropPipes);
+    killChild(child);
+    const fields = () => ({
+      status: "aborted",
+      exitCode: signalExitCode(signal),
+      signal,
+      stderrTail: readStderrTail(run.stderrFd),
+      error: `the relay was killed by ${signal}; ${name} was terminated with it — inspect the working tree before re-dispatching`,
+    });
+    // A first record in case the relay dies during the grace window; the implementer is
+    // still exiting, so it carries no read-only verdict yet.
+    verdictGate.pending = true;
+    reportRun(fields());
+    setTimeout(() => {
+      killChild(child, "SIGKILL");
+      verdictGate.pending = false;
+      // The child may flush files during the grace window; refresh the record
+      // so it matches the tree the orchestrator will actually find.
+      const result = reportRun(fields());
+      process.exit(result.exitCode);
+    }, ABORT_GRACE_MS);
+  });
+
+  // A grandchild that outlives the implementer and inherited its pipes keeps
+  // them open, so "close" would never fire. Once the implementer is gone the
+  // pipes hold nothing we need: drop them after a short drain grace.
+  child.once("exit", () => {
+    // Leaving the watchdog armed past a clean exit could mislabel it a timeout.
+    if (!watchdogFired) disarm();
+    const drain = setTimeout(() => {
+      if (!settled) dropPipes();
+    }, DRAIN_GRACE_MS);
+    drain.unref();
+  });
+
+  child.on("error", (error) => {
+    if (!settle()) return;
+    // Missing at launch means unavailable only if no probe already found it; a
+    // binary that answered --version and then vanished is a failed run.
+    const missing = error && error.code === "ENOENT";
+    const unavailable = missing && !probed;
+    const result = reportRun({
+      status: unavailable ? unavailableStatus : "failed",
+      exitCode: unavailable ? 127 : 1,
+      signal: null,
+      ...(unavailable ? {} : { stderrTail: readStderrTail(run.stderrFd) }),
+      error: missing && probed
+        ? `${name} answered the version probe but could not be launched (${error.message}); nothing was dispatched`
+        : error && error.message ? error.message : String(error),
+    });
+    process.exit(result.exitCode);
+  });
+
+  child.on("close", (code, signal) => {
+    if (!settle()) return;
+    parse(stdoutDecoder.end());
+    // An unterminated final line still counts; for the object scanner this is a no-op.
+    if (a.scanner) parse("\n");
+    if (a.onStderr) a.onStderr(stderrDecoder.end(), state);
+    // Nothing the implementer left in its process group may outlive the report: a background
+    // job could write after the tripwire's last look (a process that left the group with
+    // setsid is out of reach). POSIX only; on Windows the leftovers keep running.
+    killChild(child, "SIGKILL");
+    privatizeArtifacts(run);
+    let judged = !watchdogFired && a.verdict ? a.verdict(state, { code, signal }) || {} : {};
+    if (!judged.error && finalBlocked()) {
+      judged = { ...judged, error: `could not safely create final.txt: ${run.finalPath} appeared during the run and was left untouched` };
+    }
+    // A timed-out run is failed even if the implementer exits 0 on SIGTERM.
+    const succeeded = code === 0 && !watchdogFired && !judged.error;
+    const mapped = code ?? (signal ? signalExitCode(signal, 0) : 1);
+    const error = stallFired
+      ? a.stall.message(opts)
+      : watchdogFired
+        ? `${name} did not finish within ${a.timeoutLabel ? a.timeoutLabel(opts) : `--timeout ${opts.timeout}`}; killed by the relay watchdog`
+        : judged.error;
+    const result = reportRun({
+      status: succeeded ? "completed" : stallFired ? "stalled" : watchdogFired ? "timeout" : "failed",
+      exitCode: succeeded ? 0 : mapped === 0 || mapped === 128 ? 1 : mapped,
+      signal: signal ?? null,
+      ...(succeeded ? {} : { stderrTail: readStderrTail(run.stderrFd) }),
+      ...(error ? { error } : {}),
+      ...judged.fields,
+    });
+    process.exit(result.exitCode);
+  });
+
+  if (child.stdin) {
+    // A launch failure can surface on the child and on its stdin; the child's
+    // error handler owns the outcome, so the pipe error is swallowed.
+    child.stdin.on("error", () => {});
+    child.stdin.end(launch.stdin);
+  }
+}
+
+// ---- src/core/scan.mjs
+
+const MAX_BUFFERED_CHARS = 1_048_576;
+
+
+// Extracts top-level JSON objects from a stream that may interleave them with
+// non-JSON noise (progress bars, banners) and split them across chunks. Every
+// supported CLI writes one event per line, so a candidate object that reaches a
+// line break unclosed is abandoned, as is one whose `{` is not followed by a key
+// or `}`. Otherwise one stray brace in a banner would nest every later event
+// until the buffer cap dropped them all.
+function makeEventScanner(onObject) {
+  let buf = "";
+  let index = 0;
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  let expectKey = false;
+  const abandon = () => {
+    depth = 0;
+    start = -1;
+    inString = false;
+    escaped = false;
+    expectKey = false;
+  };
+  return (chunk) => {
+    if (!chunk) return;
+    buf += chunk;
+    for (;;) {
+      while (index < buf.length) {
+        const ch = buf[index];
+        // Only track strings inside an object (depth > 0). At depth 0 we are
+        // skipping a junk prefix, and an unmatched `"` there must not swallow the
+        // real `{...}` that follows in the same chunk.
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (ch === "\\") escaped = true;
+          else if (ch === '"') inString = false;
+          else if (ch === "\n" || ch === "\r") abandon();
+          index += 1;
+          continue;
+        }
+        if (depth > 0 && (ch === "\n" || ch === "\r")) {
+          abandon();
+          index += 1;
+          continue;
+        }
+        if (expectKey && ch !== " " && ch !== "\t") {
+          expectKey = false;
+          if (ch !== '"' && ch !== "}") {
+            // Not an object after all: rescan this character at depth 0.
+            abandon();
+            continue;
+          }
+        }
+        if (ch === '"') {
+          if (depth > 0) inString = true;
+        } else if (ch === "{") {
+          if (depth === 0) start = index;
+          depth += 1;
+          expectKey = true;
+        } else if (ch === "}") {
+          if (depth > 0) {
+            depth -= 1;
+            if (depth === 0 && start !== -1) {
+              const slice = buf.slice(start, index + 1);
+              start = -1;
+              let parsed;
+              try { parsed = JSON.parse(slice); } catch { parsed = undefined; /* skip malformed */ }
+              if (parsed !== undefined) onObject(parsed);
+            }
+          }
+        }
+        index += 1;
+      }
+      if (depth === 0 || start === -1 || buf.length - start <= MAX_BUFFERED_CHARS) break;
+      // A complete object may exceed the retained-input cap within this chunk.
+      // Drop only an oversized partial, then rescan its suffix so a later
+      // concatenated event is not lost.
+      buf = buf.slice(start + MAX_BUFFERED_CHARS);
+      index = 0;
+      abandon();
+    }
+    if (depth > 0 && start !== -1) {
+      if (start > 0) {
+        buf = buf.slice(start);
+        index -= start;
+        start = 0;
+      }
+    } else {
+      buf = "";
+      index = 0;
+      start = -1;
+    }
+  };
+}
+
+// ---- src/core/tripwire.mjs
+
+const FINGERPRINT_UNREADABLE = "<unreadable>";
+
+const FINGERPRINT_DIRECTORY = "<directory>";
+
+
+function gitRepoRoot(cwd) {
+  // Porcelain paths are relative to the repository ROOT, not to the directory git ran in
+  // (--porcelain forces status.relativePaths off). Joining them against a --cd that is a
+  // subdirectory would look for <repo>/src/src/file and find nothing at either end.
+  try {
+    return runGit(cwd, ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).replace(/\n$/, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+
+function gitStatusEntries(cwd) {
+  // -z so a path containing a space, a quote, or a newline stays one field rather than being
+  // quoted and escaped; -uall so an untracked directory is expanded into its files, because a
+  // collapsed "?? dir/" line never changes when a file inside it does.
+  try {
+    const output = runGit(cwd, ["status", "--porcelain", "-z", "-uall"]);
+    const fields = new TextDecoder("utf-8", { fatal: true }).decode(output)
+      .split("\0").filter((field) => field.length > 0);
+    const entries = [];
+    for (let i = 0; i < fields.length; i += 1) {
+      const entry = fields[i];
+      const status = entry.slice(0, 2);
+      const path = entry.slice(3);
+      // R and C can sit in EITHER status column, and under -z such an entry is followed by its
+      // origin path as its own unprefixed field. Consume that field in both cases. A rename
+      // origin belongs in the dirty set (the file moved away from it); a copy origin does not,
+      // since a copy source can be a perfectly clean file.
+      const renamed = status.includes("R");
+      const copied = status.includes("C");
+      let origin = null;
+      if (renamed || copied) {
+        i += 1;
+        origin = fields[i] ?? null;
+      }
+      entries.push({ status, path, origin });
+    }
+    return entries;
+  } catch {
+    return null;
+  }
+}
+
+
+function dirtyPaths(cwd) {
+  const entries = gitStatusEntries(cwd);
+  if (entries === null) return null;
+  const paths = [];
+  for (const entry of entries) {
+    paths.push(entry.path);
+    if (entry.status.includes("R") && entry.origin !== null) paths.push(entry.origin);
+  }
+  return paths;
+}
+
+
+// Index entries git status does not look at: skip-worktree (S) and assume-unchanged
+// (lowercase tags). A path flagged before dispatch is fingerprinted like a dirty one;
+// a flag set or cleared during the run is itself a write to the repository.
+function hiddenIndexEntries(cwd) {
+  try {
+    const output = runGit(cwd, ["ls-files", "-v", "-z"]);
+    const hidden = {};
+    for (const field of new TextDecoder("utf-8", { fatal: true }).decode(output).split("\0")) {
+      if (field.length < 3) continue;
+      const tag = field[0];
+      if (tag === "S" || (tag >= "a" && tag <= "z")) hidden[field.slice(2)] = tag;
+    }
+    return hidden;
+  } catch {
+    return null;
+  }
+}
+
+
+function asciiFold(value) {
+  return value.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+}
+
+
+function canonicalFilePath(path) {
+  const absolute = resolve(path);
+  let parent;
+  try { parent = realpathSync.native(dirname(absolute)); } catch { return absolute; }
+  const leaf = basename(absolute);
+  const canonical = join(parent, leaf);
+  try { lstatSync(canonical); } catch { return canonical; }
+  try {
+    const entries = readdirSync(parent);
+    if (entries.includes(leaf)) return canonical;
+    const matches = entries.filter((entry) => asciiFold(entry) === asciiFold(leaf));
+    return join(parent, matches.length === 1 ? matches[0] : leaf);
+  } catch {
+    return canonical;
+  }
+}
+
+
+function gitPathKey(root, path) {
+  let canonicalRoot;
+  try { canonicalRoot = realpathSync.native(root); } catch { canonicalRoot = resolve(root); }
+  const key = relative(canonicalRoot, canonicalFilePath(path));
+  return process.platform === "win32" ? key.replaceAll("\\", "/") : key;
+}
+
+
+function gitPathIsExcluded(root, path, excluded, foldedExcluded) {
+  return excluded.has(path) ||
+    (foldedExcluded.has(asciiFold(path)) && excluded.has(gitPathKey(root, join(root, path))));
+}
+
+
+// `ignore` (optional) takes a repo-relative, "/"-separated path and returns
+// true for files the implementer is known to write as its own bookkeeping
+// even in a read-only mode; those paths are outside the tripwire.
+function gitTripwireState(cwd, excludedPaths, ignore) {
+  const root = gitRepoRoot(cwd);
+  if (root === null) return null;
+  const entries = gitStatusEntries(cwd);
+  if (entries === null) return null;
+  const excluded = new Set(excludedPaths.map((path) => gitPathKey(root, path)));
+  const foldedExcluded = new Set([...excluded].map(asciiFold));
+  return entries.flatMap((entry) => [
+    [entry.status, "path", entry.path],
+    ...(entry.origin === null ? [] : [[entry.status.replace(/[^RC]/g, " "), "origin", entry.origin]]),
+  ]
+    .filter(([, , path]) => !gitPathIsExcluded(root, path, excluded, foldedExcluded) && !(ignore && ignore(path))));
+}
+
+
+function pathFingerprint(absolutePath) {
+  // Identity, not just bytes: a retargeted symlink, a flipped mode bit, or a file replaced by a
+  // directory are all writes, and none of them change file contents.
+  let stats;
+  try {
+    stats = lstatSync(absolutePath);
+  } catch (error) {
+    // Absence is a state, not a failure - it differs from every real fingerprint, so a deletion
+    // or a re-creation still registers. Any other errno means we genuinely cannot tell.
+    return error && error.code === "ENOENT" ? "absent" : FINGERPRINT_UNREADABLE;
+  }
+  if (stats.isSymbolicLink()) {
+    try {
+      return `symlink:${readlinkSync(absolutePath, { encoding: "buffer" }).toString("hex")}`;
+    } catch {
+      return FINGERPRINT_UNREADABLE;
+    }
+  }
+  // A directory in the dirty set is a submodule, whose contents belong to another repository.
+  // Reported as unknown coverage rather than silently passed off as unchanged.
+  if (stats.isDirectory()) return FINGERPRINT_DIRECTORY;
+  if (!stats.isFile()) return FINGERPRINT_UNREADABLE;
+  let fd;
+  try {
+    // Streamed rather than read whole: an unignored multi-gigabyte artifact must not be pulled
+    // into memory just to answer whether it changed.
+    const hash = createHash("sha256");
+    fd = openSync(absolutePath, "r");
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    for (;;) {
+      const read = readSync(fd, buffer, 0, buffer.length, null);
+      if (read <= 0) break;
+      hash.update(buffer.subarray(0, read));
+    }
+    return `file:${(stats.mode & 0o7777).toString(8)}:${hash.digest("hex")}`;
+  } catch {
+    return FINGERPRINT_UNREADABLE;
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* already closed */ }
+    }
+  }
+}
+
+
+function gitIndexFingerprints(root, paths) {
+  if (paths.length === 0) return new Map();
+  try {
+    const output = runGit(root, ["ls-files", "--stage", "-z"]);
+    const wanted = new Set(paths);
+    const prints = new Map(paths.map((path) => [path, []]));
+    for (const field of new TextDecoder("utf-8", { fatal: true }).decode(output).split("\0")) {
+      if (!field) continue;
+      const separator = field.indexOf("\t");
+      if (separator === -1) return null;
+      const path = field.slice(separator + 1);
+      if (wanted.has(path)) prints.get(path).push(field.slice(0, separator));
+    }
+    return prints;
+  } catch {
+    return null;
+  }
+}
+
+
+function fingerprintPaths(root, paths) {
+  // `complete` goes false the moment one path cannot be fingerprinted, so the caller reports
+  // "unknown" instead of an unearned clean bill of health.
+  const indexPrints = gitIndexFingerprints(root, paths);
+  const prints = new Map();
+  let complete = indexPrints !== null;
+  for (const path of paths) {
+    const file = pathFingerprint(join(root, path));
+    if (file === FINGERPRINT_UNREADABLE || file === FINGERPRINT_DIRECTORY) complete = false;
+    prints.set(path, { file, index: indexPrints?.get(path) ?? null });
+  }
+  return { prints, complete };
+}
+
+
+function fingerprintDirtyPaths(cwd, excludedPaths, ignore) {
+  // Only the already-dirty set is covered. A path that is clean at dispatch and gets written
+  // surfaces as a brand-new porcelain line anyway, and fingerprinting a whole repository per run
+  // would cost far more than the case it covers.
+  const root = gitRepoRoot(cwd);
+  if (root === null) return null;
+  const dirty = dirtyPaths(cwd);
+  const hidden = hiddenIndexEntries(cwd);
+  if (dirty === null || hidden === null) return null;
+  const paths = [...new Set([...dirty, ...Object.keys(hidden)])];
+  const excluded = new Set(excludedPaths.map((path) => gitPathKey(root, path)));
+  const foldedExcluded = new Set([...excluded].map(asciiFold));
+  return {
+    root,
+    ...fingerprintPaths(root, paths.filter((path) => !gitPathIsExcluded(root, path, excluded, foldedExcluded) && !(ignore && ignore(path)))),
+  };
+}
+
+
+function changedDirtyPaths(before) {
+  // Re-fingerprint exactly the baseline paths, not whatever happens to be dirty now: a path the
+  // run newly dirtied is already reported by the porcelain comparison, and letting an unreadable
+  // one of those blind this signal would be a regression, not caution.
+  if (!before) return { changed: [], complete: false };
+  const now = fingerprintPaths(before.root, [...before.prints.keys()]);
+  const changed = [];
+  for (const [path, print] of before.prints) {
+    const current = now.prints.get(path);
+    const fileKnown = print.file !== FINGERPRINT_UNREADABLE && current.file !== FINGERPRINT_UNREADABLE;
+    const fileChanged = fileKnown &&
+      !(print.file === FINGERPRINT_DIRECTORY && current.file === FINGERPRINT_DIRECTORY) &&
+      current.file !== print.file;
+    const indexChanged = print.index !== null && current.index !== null &&
+      JSON.stringify(current.index) !== JSON.stringify(print.index);
+    if (fileChanged || indexChanged) changed.push(path);
+  }
+  return { changed: changed.sort(), complete: before.complete && now.complete };
+}
+
+
+function readOnlyVerdict(beforeTree, afterTree, beforeFingerprints) {
+  // Three-valued on purpose. Proof of a write settles it even when the other signal is unknown;
+  // only when nothing is proven AND coverage is incomplete is the answer genuinely unknown.
+  // Collapsing that last case to false is the false assurance a tripwire must never give.
+  const changed = changedDirtyPaths(beforeFingerprints);
+  const porcelainMoved =
+    beforeTree !== null && afterTree !== null && JSON.stringify(beforeTree) !== JSON.stringify(afterTree);
+  if (porcelainMoved || changed.changed.length > 0) return true;
+  if (beforeTree === null || afterTree === null || !changed.complete) return null;
+  return false;
+}
+
+
+
+// Facade: take the baseline before dispatch, ask for the verdict after. `excluded`
+// lists the relay's own artifact paths, which may live inside the repository.
+// What `git status` does not show but a write can still change: commits and other ref
+// moves (HEAD, branches, stash), and the ignore rules that decide which new files status
+// lists at all.
+function repositoryState(cwd) {
+  try {
+    const refs = runGit(cwd, ["for-each-ref", "--format=%(refname) %(objectname)"], { encoding: "utf8" });
+    let head;
+    try { head = runGit(cwd, ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch { head = "<unborn>"; }
+    let symbolic;
+    try { symbolic = runGit(cwd, ["symbolic-ref", "-q", "HEAD"], { encoding: "utf8" }).trim(); } catch { symbolic = "<detached>"; }
+    const rules = [];
+    for (const name of ["info/exclude", "info/attributes"]) {
+      const path = runGit(cwd, ["rev-parse", "--git-path", name], { encoding: "utf8" }).trim();
+      let text;
+      try { text = readFileSync(resolve(cwd, path), "utf8"); } catch { text = "<absent>"; }
+      rules.push(`${name}\0${text}`);
+    }
+    return JSON.stringify({ head, symbolic, refs, rules });
+  } catch {
+    return null;
+  }
+}
+
+
+function readOnlySnapshot(cwd, excluded, ignore) {
+  return {
+    cwd,
+    excluded,
+    ignore,
+    tree: gitTripwireState(cwd, excluded, ignore),
+    prints: fingerprintDirtyPaths(cwd, excluded, ignore),
+    hidden: hiddenIndexEntries(cwd),
+    repository: repositoryState(cwd),
+  };
+}
+
+
+function readOnlyCheck(snapshot) {
+  // Rewriting the repository's own config, or flagging an index entry so status stops
+  // looking at it, are writes in their own right, and ones that would blind this check.
+  if (!gitPinIntact()) return true;
+  const hidden = hiddenIndexEntries(snapshot.cwd);
+  if (snapshot.hidden !== null && hidden !== null && JSON.stringify(hidden) !== JSON.stringify(snapshot.hidden)) return true;
+  const repository = repositoryState(snapshot.cwd);
+  if (snapshot.repository !== null && repository !== null && repository !== snapshot.repository) return true;
+  const verdict = readOnlyVerdict(snapshot.tree, gitTripwireState(snapshot.cwd, snapshot.excluded, snapshot.ignore), snapshot.prints);
+  const covered = snapshot.hidden !== null && hidden !== null && snapshot.repository !== null && repository !== null;
+  return verdict === false && !covered ? null : verdict;
+}
+
+
+const tripwire = { snapshot: readOnlySnapshot, check: readOnlyCheck };
+
+// ---- src/adapters/claude.mjs
+
+const MAX_BRIEF_BYTES = 10_000_000;
+
+const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max", "ultracode"];
+
+const SAFE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:@\/\[\]-]*$/;
+
+const SAFE_SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+
+const IS_WINDOWS = process.platform === "win32";
+
+
+// Nested under Claude Code, only CLAUDECODE is removed; credentials and
+// CLAUDE_CODE_CHILD_SESSION are preserved. Windows env keys are case-insensitive.
+function childEnvironment() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (IS_WINDOWS ? key.toUpperCase() === "CLAUDECODE" : key === "CLAUDECODE") delete env[key];
+  }
+  return env;
+}
+
+
+function environmentValue(env, name) {
+  if (Object.prototype.hasOwnProperty.call(env, name)) return env[name];
+  if (!IS_WINDOWS) return undefined;
+  const key = Object.keys(env).find((candidate) => candidate.toUpperCase() === name);
+  return key ? env[key] : undefined;
+}
+
+
+// Resolves `claude` on PATH. On Windows a .cmd/.bat npm shim must go through
+// cmd.exe; a native claude.exe is spawned directly.
+function resolveClaudeLauncher(env, cwd) {
+  const pathValue = environmentValue(env, "PATH");
+  if (!pathValue) return null;
+  // Absolute entries only: an empty or relative entry would resolve inside the untrusted --cd.
+  const pathEntries = pathValue.split(delimiter).map((entry) => entry.replace(/^"(.*)"$/, "$1")).filter((entry) => entry && isAbsolute(entry));
+  if (IS_WINDOWS) {
+    const pathExt = (environmentValue(env, "PATHEXT") || ".COM;.EXE;.BAT;.CMD")
+      .split(";").map((value) => value.trim().toLowerCase()).filter(Boolean);
+    for (const entry of pathEntries) {
+      const directory = entry;
+      for (const extension of pathExt) {
+        const candidate = join(directory, `claude${extension}`);
+        try {
+          if (!statSync(candidate).isFile()) continue;
+          return { path: candidate, kind: extension === ".cmd" || extension === ".bat" ? "cmd" : "direct" };
+        } catch {
+          // Keep searching PATH.
+        }
+      }
+    }
+    return null;
+  }
+  for (const entry of pathEntries) {
+    const candidate = join(entry, "claude");
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      if (statSync(candidate).isFile()) return { path: candidate, kind: "direct" };
+    } catch {
+      // Keep searching PATH.
+    }
+  }
+  return null;
+}
+
+
+function quoteCmdArgument(value) {
+  // cmd expands %VAR% even inside quotes, and embedded quotes/newlines can break
+  // the /c command boundary. Reject those rare path characters instead of
+  // pretending an npm .cmd launch is safe. All user-selectable token values are
+  // independently restricted by the flag patterns.
+  if (/[\0\r\n"%!]/.test(value)) {
+    throw new Error("the npm claude.cmd launch cannot safely serialize an argument containing %, !, a quote, or a newline; use the native claude.exe or a safe artifact path");
+  }
+  return `"${value}"`;
+}
+
+
+function launchSpec(launcher, args, env) {
+  if (launcher.kind === "direct") return { command: launcher.path, args, env };
+  const commandLine = [launcher.path, ...args].map(quoteCmdArgument).join(" ");
+  return {
+    command: environmentValue(env, "COMSPEC") || "cmd.exe",
+    args: ["/d", "/v:off", "/s", "/c", `"${commandLine}"`],
+    env,
+    // The last argument is an intentionally serialized cmd /c program; letting
+    // libuv quote it again would change cmd's nested-quote boundary.
+    verbatim: true,
+  };
+}
+
+
+const shellTool = () => (IS_WINDOWS ? "PowerShell" : "Bash");
+
+
+function permissionMode(opts) {
+  if (opts.readOnly) return "plan";
+  if (opts.dangerouslySkipPermissions) return "bypassPermissions";
+  return "acceptEdits";
+}
+
+
+function toolSurface(opts) {
+  return opts.readOnly ? "Read,Glob,Grep" : `Read,Glob,Grep,Edit,Write,${shellTool()}`;
+}
+
+
+function profileSettings(opts) {
+  const shell = shellTool();
+  const shellSandboxEnabled = !opts.readOnly && !IS_WINDOWS;
+  return {
+    disableClaudeAiConnectors: true,
+    ...(IS_WINDOWS ? { env: { CLAUDE_CODE_USE_POWERSHELL_TOOL: "1" } } : {}),
+    permissions: {
+      deny: opts.readOnly
+        ? []
+        : [
+            // Two-wildcard git forms require text after the subcommand, so the
+            // single-wildcard forms also catch `git -C <dir> push`; they also
+            // deny reads like `git log --grep push`. Anchor `claude` at command
+            // position so reads mentioning it remain allowed. Keep
+            // `switchboard-claude` as a substring rule to stop recursive relay
+            // invocation; any command containing it is denied.
+            `${shell}(git commit *)`,
+            `${shell}(git * commit *)`,
+            `${shell}(git * commit)`,
+            `${shell}(git push *)`,
+            `${shell}(git * push *)`,
+            `${shell}(git * push)`,
+            `${shell}(claude *)`,
+            `${shell}(*switchboard-claude*)`,
+          ],
+    },
+    ...(shellSandboxEnabled
+      ? {
+          sandbox: {
+            enabled: true,
+            failIfUnavailable: true,
+            autoAllowBashIfSandboxed: true,
+            allowUnsandboxedCommands: false,
+            excludedCommands: [],
+            filesystem: { disabled: false },
+          },
+        }
+      : {}),
+  };
+}
+
+
+function claudeArgs(opts, run) {
+  const args = [
+    "-p",
+    "--output-format", "stream-json",
+    "--verbose",
+    "--tools", toolSurface(opts),
+    "--strict-mcp-config",
+    "--disallowedTools", "mcp__*",
+    "--disable-slash-commands",
+    "--settings", run.settingsPath,
+    // Project and local settings come from the repository, and their hooks run commands
+    // outside the tool limits and the sandbox; only the user's own settings load unless
+    // the caller trusts the repository.
+    "--setting-sources", opts.projectSettings ? "user,project,local" : "user",
+  ];
+  if (opts.readOnly) {
+    args.push("--permission-mode", "plan");
+  } else if (opts.dangerouslySkipPermissions) {
+    args.push("--dangerously-skip-permissions");
+  } else {
+    args.push("--permission-mode", "acceptEdits");
+    // Supported platforms auto-approve only commands that remain inside
+    // Claude's sandbox. Native Windows has no shell sandbox, so approving its
+    // selected shell is the explicit tradeoff that keeps print mode headless.
+    if (IS_WINDOWS) args.push("--allowedTools", "PowerShell");
+  }
+  // The permission profile is passed on every invocation, including
+  // --continue/--resume, rather than assuming a session remembers it.
+  if (opts.resumeLast) args.push("--continue");
+  else if (opts.session) args.push("--resume", opts.session);
+  if (opts.model) args.push("--model", opts.model);
+  if (opts.effort) args.push("--effort", opts.effort);
+  if (opts.maxTurns) args.push("--max-turns", opts.maxTurns);
+  if (opts.maxBudgetUsd) args.push("--max-budget-usd", opts.maxBudgetUsd);
+  if (opts.autocompact) args.push("--autocompact", opts.autocompact);
+  return args;
+}
+
+
+function eventSessionId(event) {
+  return event.session_id ?? event.sessionId ?? (event.session && (event.session.id ?? event.session.session_id)) ?? null;
+}
+
+
+const finiteNumber = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+
+
+const claude = {
+  key: "claude",
+  versionField: "claudeVersion",
+  defaults: {
+    model: null,
+    effort: null,
+    maxTurns: null,
+    maxBudgetUsd: null,
+    autocompact: null,
+    session: null,
+    projectSettings: false,
+  },
+  flags: {
+    "--model": { key: "model", pattern: SAFE_MODEL },
+    "--effort": { key: "effort", choices: EFFORT_LEVELS },
+    "--max-turns": { key: "maxTurns", pattern: /^[1-9]\d{0,14}$/ },
+    "--max-budget-usd": { key: "maxBudgetUsd", pattern: /^(?:0|[1-9]\d*)(?:\.\d+)?$/ },
+    "--autocompact": { key: "autocompact", pattern: /^(?:auto|[1-9]\d*[km]?)$/i },
+    "--resume-last": { key: "resumeLast", kind: "bool" },
+    "--session": { key: "session", pattern: SAFE_SESSION },
+    "--read-only": { key: "readOnly", kind: "bool" },
+    "--dangerously-skip-permissions": { key: "dangerouslySkipPermissions", kind: "bool" },
+    "--project-settings": { key: "projectSettings", kind: "bool" },
+  },
+  validate(opts) {
+    exclusive(opts, [
+      ["resumeLast", "session", "--resume-last and --session are mutually exclusive; pass only one"],
+      ["readOnly", "dangerouslySkipPermissions", "--read-only and --dangerously-skip-permissions are mutually exclusive"],
+    ]);
+    if (opts.maxBudgetUsd !== null && !(Number(opts.maxBudgetUsd) > 0)) {
+      fail("--max-budget-usd must be a positive decimal number");
+    }
+  },
+  // An explicit --dangerously-skip-permissions overrides a lane's readOnly dial.
+  laneConflicts: { readOnly: ["readOnly", "dangerouslySkipPermissions"] },
+  maxBriefBytes: MAX_BRIEF_BYTES,
+  briefTooLarge: (kb) => `brief is ${Math.ceil(kb / 1000)}MB; Claude Code caps piped stdin at 10MB. Put large context in the workspace and reference it from a smaller brief.`,
+  artifacts: { settingsPath: "profile.json" },
+  readOnly: (opts) => opts.readOnly,
+  tripwire,
+  state: (opts) => ({
+    env: childEnvironment(),
+    launcher: null,
+    sessionId: opts.session,
+    permissionMode: permissionMode(opts),
+    sawResult: false,
+    resultSubtype: null,
+    resultIsError: false,
+    finalMessage: "",
+    numTurns: null,
+    usage: null,
+    totalCostUsd: null,
+  }),
+  fields: (opts, state, run) => ({
+    model: opts.model,
+    effort: opts.effort,
+    maxTurns: opts.maxTurns === null ? null : Number(opts.maxTurns),
+    maxBudgetUsd: opts.maxBudgetUsd === null ? null : Number(opts.maxBudgetUsd),
+    ...(opts.autocompact === null ? {} : { autocompact: opts.autocompact }),
+    timeout: opts.timeout,
+    readOnly: opts.readOnly,
+    projectSettings: opts.projectSettings,
+    resumed: Boolean(opts.resumeLast || opts.session),
+    resumeLast: opts.resumeLast,
+    permissionMode: state.permissionMode,
+    toolSurface: toolSurface(opts).split(","),
+    shellSandbox: opts.readOnly ? "not-applicable" : IS_WINDOWS ? "unsupported-on-native-windows" : "strict",
+    dangerouslySkipPermissions: opts.dangerouslySkipPermissions,
+    resultSubtype: state.resultSubtype,
+    numTurns: state.numTurns,
+    usage: state.usage,
+    settingsPath: run.settingsPath,
+  }),
+  version(opts) {
+    // The run's opts carry no state yet, so resolve here and stash on opts.
+    opts.launcher = resolveClaudeLauncher(childEnvironment(), opts.cd);
+    if (!opts.launcher) return { unavailable: true };
+    return { launch: launchSpec(opts.launcher, ["--version"], childEnvironment()), timeoutMs: 15_000 };
+  },
+  unavailableHint: "Install Claude Code and run `claude auth login`.",
+  prepare(opts, run) {
+    writeJsonAtomic(run.settingsPath, profileSettings(opts));
+  },
+  launch(opts, brief, run, state) {
+    // The brief is sent through stdin, never argv.
+    return { ...launchSpec(opts.launcher, claudeArgs(opts, run), state.env), stdin: brief };
+  },
+  scanner: makeEventScanner,
+  onEvent(event, state) {
+    if (!event || typeof event !== "object") return;
+    const sessionId = eventSessionId(event);
+    if (typeof sessionId === "string" && sessionId) state.sessionId = sessionId;
+    if (event.type === "system" && event.subtype === "init") {
+      const mode = event.permissionMode ?? event.permission_mode;
+      if (typeof mode === "string" && mode) state.permissionMode = mode;
+    }
+    if (event.type !== "result") return;
+    state.sawResult = true;
+    state.resultSubtype = typeof event.subtype === "string" ? event.subtype : null;
+    state.resultIsError = event.is_error === true ||
+      (state.resultSubtype !== null && /^error(?:_|$)/i.test(state.resultSubtype));
+    state.finalMessage = typeof event.result === "string" ? event.result : "";
+    state.usage = event.usage && typeof event.usage === "object" ? event.usage : null;
+    state.totalCostUsd = finiteNumber(event.total_cost_usd ?? event.cost_usd);
+    state.numTurns = finiteNumber(event.num_turns ?? event.numTurns);
+  },
+  // The terminal result event carries Anthropic usage counts and the run's spend.
+  tokens: (state) => state.usage && {
+    input: state.usage.input_tokens,
+    output: state.usage.output_tokens,
+    cacheRead: state.usage.cache_read_input_tokens,
+    cacheWrite: state.usage.cache_creation_input_tokens,
+  },
+  cost: (state) => state.totalCostUsd,
+  final: (state) => state.finalMessage,
+  verdict(state) {
+    if (!state.sawResult) return { error: "claude exited without a terminal result event; inspect events.jsonl and stderr.txt" };
+    if (state.resultIsError) return { error: `claude returned an error result${state.resultSubtype ? ` (${state.resultSubtype})` : ""}` };
+    return null;
+  },
+  summary(result) {
+    const lines = [`permission mode: ${result.permissionMode}  ·  shell sandbox: ${result.shellSandbox}`];
+    if (result.dangerouslySkipPermissions) {
+      lines.push("warning: bypassPermissions was explicitly enabled; direct file tools can reach beyond normal permission boundaries.");
+    }
+    if (result.resultSubtype) lines.push(`result subtype: ${result.resultSubtype}`);
+    if (typeof result.numTurns === "number") lines.push(`turns: ${result.numTurns}`);
+    return lines;
+  },
+  emptyReport: "(no final result text captured)",
+};
+
+
+await runRelay(claude);

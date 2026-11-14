@@ -5,45 +5,27 @@
       "title": "Switchboard: delegate to CLI agents",
       "description": "Delegate a coding task to a CLI implementer agent, then review the diff and commit it yourself.",
       "skills": [
-        "claude-delegate",
-        "cline-delegate",
-        "codex-delegate",
-        "opencode-delegate",
-        "agy-delegate",
-        "grok-delegate",
-        "kimi-delegate",
-        "muse-delegate",
-        "qoder-delegate",
-        "vibe-delegate",
-        "cursor-delegate",
-        "pi-delegate",
-        "omp-delegate",
-        "aider-delegate",
-        "copilot-delegate",
-        "warp-delegate",
-        "zcode-delegate",
-        "commandcode-delegate"
+        "switchboard-claude",
+        "switchboard-codex",
+        "switchboard-cursor",
+        "switchboard-opencode",
+        "switchboard-pi",
+        "switchboard-omp",
+        "switchboard-warp"
       ]
     },
     {
       "title": "Switchboard: setup",
       "description": "Configure fleet lanes: which implementer handles which kind of work.",
       "skills": [
-        "delegate-setup"
+        "switchboard-setup"
       ]
     },
     {
       "title": "Switchboard: queue",
       "description": "Run a batch of briefs in parallel across implementers, each in its own git worktree, with fallback.",
       "skills": [
-        "delegate-queue"
-      ]
-    },
-    {
-      "title": "Switchboard: Codex orchestration",
-      "description": "Keep Codex delegation pending until a registered implementer relay completes.",
-      "skills": [
-        "codex-background"
+        "switchboard-queue"
       ]
     }
   ]

@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { parseDuration } from "../src/core/duration.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const discoverScript = join(root, "skills", "delegate-setup", "scripts", "discover.mjs");
+const discoverScript = join(root, "skills", "switchboard-setup", "scripts", "discover.mjs");
 
 const READ_BRIEF = `List the files in this repository and summarize what README.md says in one sentence.
 
@@ -99,7 +99,7 @@ function runCheck(cli, kind, opts) {
   const briefPath = join(out, "..", `${out.split(/[\\/]/).pop()}-brief.txt`);
   writeFileSync(briefPath, kind === "read-only" ? READ_BRIEF : WRITE_BRIEF);
   const args = [
-    join(root, "skills", `${cli.key}-delegate`, "scripts", "relay.mjs"),
+    join(root, "skills", `switchboard-${cli.key}`, "scripts", "relay.mjs"),
     "--brief", briefPath, "--cd", repo, "--out-dir", out, "--timeout", opts.timeout,
     ...(kind === "read-only" ? [cli.readOnlyFlag] : []),
     ...(opts.extra[cli.key] || []),
@@ -117,7 +117,7 @@ function runCheck(cli, kind, opts) {
     detail = `no result.json (relay exit ${proc.status}): ${(proc.stderr || "").trim().split("\n").pop()}`;
   } else if (kind === "read-only") {
     // The relay's tripwire is the authority where it exists: it ignores the implementer's own
-    // bookkeeping (aider's history and tags cache) that a bare porcelain check would count.
+    // bookkeeping that a bare porcelain check would count.
     const tripwire = result.readOnlyViolation;
     passed = result.status === "completed" && (tripwire === undefined ? status === "" : tripwire === false);
     detail = `status ${result.status}, tree ${status === "" ? "unchanged" : "CHANGED"}, readOnlyViolation ${tripwire ?? "n/a"}`;
@@ -145,10 +145,8 @@ function runCheck(cli, kind, opts) {
 }
 
 const READ_ONLY_FLAG = {
-  agy: "--read-only", aider: "--read-only", claude: "--read-only", cline: "--plan", codex: "--read-only",
-  commandcode: "--read-only", copilot: "--read-only", cursor: "--read-only", grok: "--read-only",
-  muse: "--read-only", omp: "--read-only", opencode: "--read-only", pi: "--read-only",
-  vibe: "--plan-only", zcode: "--read-only",
+  claude: "--read-only", codex: "--read-only", cursor: "--read-only",
+  omp: "--read-only", opencode: "--read-only", pi: "--read-only",
 };
 
 function main() {

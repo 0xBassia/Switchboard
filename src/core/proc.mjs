@@ -3,6 +3,7 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { constants } from "node:os";
+import { isAbsolute } from "node:path";
 
 export const IS_WIN = process.platform === "win32";
 
@@ -10,8 +11,16 @@ export const IS_WIN = process.platform === "win32";
 // always, CreateProcess unless this variable is set. The --cd checkout is untrusted,
 // so it must never get to supply `git`, `taskkill` or the implementer itself. The
 // implementer inherits it, which is the safe default there too.
+// POSIX lookup treats an empty or relative PATH entry (a stray ":" from PATH=$X:$PATH)
+// as a directory relative to the child's cwd, which is the untrusted --cd checkout, so
+// only absolute entries are kept, for the relay and everything it starts.
 export function guardExePath() {
   if (IS_WIN && !process.env.NoDefaultCurrentDirectoryInExePath) process.env.NoDefaultCurrentDirectoryInExePath = "1";
+  for (const key of Object.keys(process.env).filter((name) => name.toUpperCase() === "PATH")) {
+    const entries = process.env[key].split(IS_WIN ? ";" : ":");
+    const kept = entries.filter((entry) => isAbsolute(entry.replace(/^"(.*)"$/, "$1")));
+    if (kept.length !== entries.length) process.env[key] = kept.join(IS_WIN ? ";" : ":");
+  }
 }
 
 export function signalExitCode(signal, fallback = 15) {

@@ -26,6 +26,6 @@
   </g>
   <text x="80" y="320" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="104" fill="#efe9dc">HAND OFF THE CODE.</text>
   <text x="80" y="428" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="104" fill="#ffb020">KEEP THE JUDGMENT.</text>
-  <text x="80" y="512" font-family="'IBM Plex Sans','Segoe UI',Arial,sans-serif" font-size="29" fill="#ece6d8">Route tasks to 18 CLI coding agents. Review every diff. Land it yourself.</text>
+  <text x="80" y="512" font-family="'IBM Plex Sans','Segoe UI',Arial,sans-serif" font-size="29" fill="#ece6d8">Route tasks to 7 CLI coding agents. Review every diff. Land it yourself.</text>
   <text x="80" y="570" font-family="'IBM Plex Mono',Menlo,monospace" font-size="24" fill="#ffb020">$ npx skills add 0xBassia/switchboard</text>
 </svg>

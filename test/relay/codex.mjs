@@ -308,7 +308,8 @@ h.check("codex clean-env: without the flag the environment is still inherited",
   inheritedCapture?.SMOKE_SECRET_TOKEN === "inherited");
 // ---- codex PATH: Store WindowsApps entries never reach a sandboxed child on win32 ----
 // The two shapes a Store install puts on PATH: the package folder itself and the per-user
-// alias folder. Off win32 the relay must leave PATH byte-identical, entries like these included.
+// alias folder. Off win32 these are relative paths, which every relay drops from PATH at
+// startup (a relative entry would resolve inside the checkout); nothing else changes.
 const windowsAppsEntries = [
   "C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.5.0_x64__8wekyb3d8bbwe",
   "C:\\Users\\smoke\\AppData\\Local\\Microsoft\\WindowsApps",
@@ -316,7 +317,9 @@ const windowsAppsEntries = [
 const pathWithWindowsApps = [windowsAppsEntries[0], h.baseEnv.PATH, windowsAppsEntries[1]].join(h.WIN ? ";" : ":");
 const pathWithoutWindowsApps = h.WIN
   ? pathWithWindowsApps.split(";").filter((entry) => !/(^|[\\/])WindowsApps([\\/]|$)/i.test(entry)).join(";")
-  : pathWithWindowsApps;
+  : h.baseEnv.PATH;
+// What a full-access run receives: everything on win32, the absolute entries elsewhere.
+const pathAsGiven = h.WIN ? pathWithWindowsApps : h.baseEnv.PATH;
 const windowsAppsEnv = { ...h.baseEnv, PATH: pathWithWindowsApps, ...(h.WIN ? { Path: pathWithWindowsApps } : {}) };
 const capturePath = (name, flags, extraEnv) => {
   const envFile = join(h.scratch, `env-${name}`);
@@ -329,7 +332,7 @@ const capturePath = (name, flags, extraEnv) => {
 };
 const sandboxedPath = capturePath("windowsapps-sandboxed", []);
 h.check("codex PATH: a sandboxed run completes with WindowsApps entries present", sandboxedPath.status === 0);
-h.check(`codex PATH: ${h.WIN ? "WindowsApps entries are removed from" : "off win32 nothing is removed from"} the dispatch PATH`,
+h.check(`codex PATH: ${h.WIN ? "WindowsApps entries are removed from" : "off win32 only the relative entries are dropped from"} the dispatch PATH`,
   sandboxedPath.dispatch === pathWithoutWindowsApps);
 h.check("codex PATH: the preflight sees the same PATH as the dispatch", sandboxedPath.preflight === sandboxedPath.dispatch);
 h.check("codex PATH: the shim entry survives the filter",
@@ -338,7 +341,7 @@ const readOnlyPath = capturePath("windowsapps-read-only", ["--read-only"]);
 h.check("codex PATH: --read-only filters like workspace-write", readOnlyPath.status === 0 && readOnlyPath.dispatch === pathWithoutWindowsApps);
 const fullAccessPath = capturePath("windowsapps-full-access", ["--sandbox", "danger-full-access"]);
 h.check("codex PATH: danger-full-access passes PATH through unchanged",
-  fullAccessPath.status === 0 && fullAccessPath.dispatch === pathWithWindowsApps && fullAccessPath.preflight === pathWithWindowsApps);
+  fullAccessPath.status === 0 && fullAccessPath.dispatch === pathAsGiven && fullAccessPath.preflight === pathAsGiven);
 writeFileSync(fallbackPath, JSON.stringify({
   SMOKE_MODE: "capture",
   SMOKE_ARGS_FILE: join(h.scratch, "args-windowsapps-clean-env"),

@@ -2,8 +2,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Utility skills: not *-delegate, no relay.mjs / four-reference contract. */
-const UTILITY_SKILLS = ["delegate-setup", "codex-background", "delegate-queue"];
+/** Utility skills: no relay.mjs / four-reference contract. Every other switchboard-* dir is an implementer. */
+const UTILITY_SKILLS = ["switchboard-setup", "switchboard-queue"];
 
 function metadataVersion(source) {
   const lines = source.split(/\r?\n/);
@@ -23,7 +23,7 @@ function metadataVersion(source) {
 
 export function runPackageShape(h) {
   const skillsDir = join(h.testDir, "..", "skills");
-  const onDiskDelegate = readdirSync(skillsDir).filter((d) => d.endsWith("-delegate")).sort();
+  const onDiskDelegate = readdirSync(skillsDir).filter((d) => d.startsWith("switchboard-") && !UTILITY_SKILLS.includes(d)).sort();
   const onDiskUtility = readdirSync(skillsDir).filter((d) => UTILITY_SKILLS.includes(d)).sort();
   const registered = new Set(
     JSON.parse(readFileSync(join(h.testDir, "..", "skills.sh.json"), "utf8"))
@@ -33,7 +33,7 @@ export function runPackageShape(h) {
 
   h.check("skills/ is not empty", onDiskDelegate.length > 0);
   for (const dir of onDiskDelegate) {
-    const name = dir.replace(/-delegate$/, "");
+    const name = dir.replace(/^switchboard-/, "");
     h.check(`${name}: in the smoke matrix`, h.SKILLS.includes(name));
     h.check(`${name}: SKILL.md`, existsSync(join(skillsDir, dir, "SKILL.md")));
     h.check(`${name}: scripts/relay.mjs`, existsSync(join(skillsDir, dir, "scripts", "relay.mjs")));
@@ -72,7 +72,7 @@ export function runPackageShape(h) {
     "all skill metadata.version values are present and in lockstep",
     !metadataVersions.includes("(missing)") && new Set(metadataVersions).size === 1,
   );
-  h.check("smoke matrix has no entry without a directory", h.SKILLS.every((s) => onDiskDelegate.includes(`${s}-delegate`)));
+  h.check("smoke matrix has no entry without a directory", h.SKILLS.every((s) => onDiskDelegate.includes(`switchboard-${s}`)));
   h.check(
     "skills.sh.json has no entry without a directory",
     [...registered].every((s) => existsSync(join(skillsDir, s))),
@@ -80,7 +80,7 @@ export function runPackageShape(h) {
   h.check(
     "no unexpected skill directories",
     readdirSync(skillsDir).every(
-      (d) => d.endsWith("-delegate") || UTILITY_SKILLS.includes(d),
+      (d) => d.startsWith("switchboard-"),
     ),
   );
 }

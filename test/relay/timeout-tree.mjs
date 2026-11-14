@@ -5,19 +5,11 @@ import { join } from "node:path";
 export async function runTimeoutTree(h) {
 const TIMEOUT_CASES = [
   { skill: "claude", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "cline", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
   { skill: "codex", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
   { skill: "opencode", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "grok", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "kimi", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "muse", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "qoder", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
   { skill: "pi", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
   { skill: "omp", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
   { skill: "cursor", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "vibe", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "agy", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
-  { skill: "aider", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
   { skill: "warp", flags: ["--timeout", "6s"], exitDeadline: 45_000 },
 ];
 async function driveTimeout({ skill, flags, exitDeadline }, mode, extraEnv, tag) {
@@ -41,13 +33,6 @@ async function driveTimeout({ skill, flags, exitDeadline }, mode, extraEnv, tag)
     const r = h.result(outDir);
     h.check(`${skill} ${tag}: status is "timeout" (got ${r.status})`, r.status === "timeout");
     h.check(`${skill} ${tag}: relay exit code is non-zero`, r.exitCode !== 0);
-    if (skill === "agy") {
-      const timeoutIndex = flags.indexOf("--timeout");
-      const expectedLimit = timeoutIndex === -1
-        ? `--print-timeout ${flags[flags.indexOf("--print-timeout") + 1]} plus 60s grace`
-        : `--timeout ${flags[timeoutIndex + 1]}`;
-      h.check(`agy ${tag}: selected limit is named in the result`, r.error?.includes(expectedLimit));
-    }
   }
   h.check(`${skill} ${tag}: the implementer process is dead`,
     implementerPid !== null && await h.until(() => !h.alive(implementerPid), 20_000));
@@ -59,12 +44,6 @@ async function driveTimeout({ skill, flags, exitDeadline }, mode, extraEnv, tag)
 for (const tc of TIMEOUT_CASES) {
   await driveTimeout(tc, "timeout", {}, "timeout");
 }
-await driveTimeout(
-  { skill: "agy", flags: ["--print-timeout", "1s", "--timeout", "4s"], exitDeadline: 45_000 },
-  "timeout",
-  {},
-  "timeout-precedence",
-);
 
 // A compliant parent must not shield a defiant descendant: the parent exits on the group
 // SIGTERM, its grandchild ignores it, and the sweep at close must still fell the grandchild

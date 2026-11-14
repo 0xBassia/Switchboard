@@ -27,7 +27,7 @@ function extract(source, symbol, kind, relay) {
 }
 
 function loadScanner(relay, symbol, onVisit) {
-  const source = readFileSync(join(here, "..", "skills", `${relay}-delegate`, "scripts", "relay.mjs"), "utf8");
+  const source = readFileSync(join(here, "..", "skills", `switchboard-${relay}`, "scripts", "relay.mjs"), "utf8");
   const maxBufferedChars = extract(source, "MAX_BUFFERED_CHARS", "const", relay);
   let scanner = extract(source, symbol, "function", relay);
   if (onVisit) {
@@ -54,7 +54,7 @@ function loadScanner(relay, symbol, onVisit) {
 
 // Parity covers every makeEventScanner copy; Vibe's makeLineScanner is tested directly.
 const makeEventScanner = loadScanner("claude", "makeEventScanner");
-const makeLineScanner = loadScanner("vibe", "makeLineScanner");
+const makeLineScanner = loadScanner("codex", "makeLineScanner");
 
 let passed = 0;
 let failed = 0;
@@ -150,10 +150,10 @@ test("event scanner: prose braces split across chunks still resynchronise", () =
   assert.deepEqual(events, [{ ok: 1 }]);
 });
 
-test("event scanner: a pretty-printed object spanning lines still parses", () => {
+test("event scanner: an unclosed object in a banner line does not swallow the next line", () => {
   const { events, scan } = collectScanner(makeEventScanner);
-  scan('{\n  "a": {\n    "b": [1, 2]\n  },\n  "c": "x"\n}\n');
-  assert.deepEqual(events, [{ a: { b: [1, 2] }, c: "x" }]);
+  scan('config: {"x": [1, 2\n{"type":"result","ok":1}\n');
+  assert.deepEqual(events, [{ type: "result", ok: 1 }]);
 });
 
 test("event scanner: an empty object in prose is harmless", () => {
@@ -245,7 +245,7 @@ test("line scanner: split line parses once the newline arrives", () => {
 
 test("line scanner: many small chunks search only newly appended data", () => {
   let searched = 0;
-  const factory = loadScanner("vibe", "makeLineScanner", (length) => { searched += length; });
+  const factory = loadScanner("codex", "makeLineScanner", (length) => { searched += length; });
   const { events, scan } = collectScanner(factory);
   const partial = "x".repeat(4096);
   for (let i = 0; i < partial.length; i += 16) scan(partial.slice(i, i + 16));

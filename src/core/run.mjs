@@ -7,7 +7,7 @@ import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fail } from "./cli.mjs";
 
-export const RESULT_SCHEMA = "delegate-relay.result.v1";
+export const RESULT_SCHEMA = "switchboard-relay.result.v1";
 
 export function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
@@ -45,7 +45,7 @@ export function openPrivate(path) {
   return fd;
 }
 
-// Artifacts the implementer writes itself (codex's final.txt, agy's log) get the
+// Artifacts the implementer writes itself (codex's final.txt) get the
 // relay's own mode once it has exited. Links are left alone: chmod would follow them.
 export function privatizeArtifacts(run) {
   for (const path of runArtifactPaths(run)) {
@@ -62,7 +62,7 @@ export function prepareRunDir(opts, brief, extra = {}) {
     if (outDir) {
       mkdirSync(outDir, { recursive: true, mode: 0o700 });
     } else {
-      const parent = join(tmpdir(), "delegate-relay");
+      const parent = join(tmpdir(), "switchboard-relay");
       mkdirSync(parent, { recursive: true, mode: 0o700 });
       outDir = mkdtempSync(join(parent, `${basename(opts.cd) || "repo"}-${timestamp()}-`));
     }

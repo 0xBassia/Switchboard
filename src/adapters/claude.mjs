@@ -1,5 +1,5 @@
 /**
- * Switchboard · claude-delegate · relay.mjs
+ * Switchboard · switchboard-claude · relay.mjs
  *
  * Dispatch a self-contained brief to a separate Claude Code CLI process
  * (`claude -p`), capture the structured stream, and write a stable result the
@@ -14,7 +14,7 @@
  *
  * The relay never commits. Its write-capable profiles use string rules to deny
  * common direct forms of `git commit`, `git push`, and nested `claude`, plus
- * any command containing `claude-delegate`. Aliases, scripts, and wrappers can
+ * any command containing `switchboard-claude`. Aliases, scripts, and wrappers can
  * bypass those speed bumps; the brief's no-commit instruction and orchestrator
  * review remain the boundary. The orchestrator re-runs the project gates and
  * lands the work.
@@ -54,7 +54,7 @@
  * Options:
  *   --brief <file>                    Brief path. Omit to read the brief from stdin.
  *   --cd <dir>                        Child cwd (default: current directory).
- *   --lane <name>           Fleet lane from delegate-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
  *   --out-dir <dir>                   Artifact directory (default: system temp).
  *   --timeout <dur>                   Relay watchdog; off by default. Use h/m/s,
  *                                     such as 30m, 90s, or 1h30m.
@@ -69,6 +69,8 @@
  *                                     Mutually exclusive with --resume-last.
  *   --read-only                       Plan mode with Read, Glob, and Grep only.
  *   --dangerously-skip-permissions    Opt into Claude's bypassPermissions mode.
+ *   --project-settings                Also load the repository's .claude/settings.json and
+ *                                     settings.local.json (hooks included). Trusted repos only.
  *                                     Mutually exclusive with --read-only.
  *   -h, --help                        Show this help.
  *
@@ -82,7 +84,7 @@
  *   final.txt       final result event's text
  *   stderr.txt      complete Claude stderr
  *   profile.json    inspectable per-run settings passed with --settings
- *   result.json     delegate-relay.result.v1
+ *   result.json     switchboard-relay.result.v1
  *
  * Exit codes: usage errors exit 2 before result.json; a missing `claude` exits
  * 127 with status "claude_unavailable"; otherwise the exit mirrors Claude, with
@@ -214,7 +216,7 @@ function profileSettings(opts) {
             // single-wildcard forms also catch `git -C <dir> push`; they also
             // deny reads like `git log --grep push`. Anchor `claude` at command
             // position so reads mentioning it remain allowed. Keep
-            // `claude-delegate` as a substring rule to stop recursive relay
+            // `switchboard-claude` as a substring rule to stop recursive relay
             // invocation; any command containing it is denied.
             `${shell}(git commit *)`,
             `${shell}(git * commit *)`,
@@ -223,7 +225,7 @@ function profileSettings(opts) {
             `${shell}(git * push *)`,
             `${shell}(git * push)`,
             `${shell}(claude *)`,
-            `${shell}(*claude-delegate*)`,
+            `${shell}(*switchboard-claude*)`,
           ],
     },
     ...(shellSandboxEnabled
@@ -251,6 +253,10 @@ function claudeArgs(opts, run) {
     "--disallowedTools", "mcp__*",
     "--disable-slash-commands",
     "--settings", run.settingsPath,
+    // Project and local settings come from the repository, and their hooks run commands
+    // outside the tool limits and the sandbox; only the user's own settings load unless
+    // the caller trusts the repository.
+    "--setting-sources", opts.projectSettings ? "user,project,local" : "user",
   ];
   if (opts.readOnly) {
     args.push("--permission-mode", "plan");
@@ -291,6 +297,7 @@ const claude = {
     maxBudgetUsd: null,
     autocompact: null,
     session: null,
+    projectSettings: false,
   },
   flags: {
     "--model": { key: "model", pattern: SAFE_MODEL },
@@ -302,6 +309,7 @@ const claude = {
     "--session": { key: "session", pattern: SAFE_SESSION },
     "--read-only": { key: "readOnly", kind: "bool" },
     "--dangerously-skip-permissions": { key: "dangerouslySkipPermissions", kind: "bool" },
+    "--project-settings": { key: "projectSettings", kind: "bool" },
   },
   validate(opts) {
     exclusive(opts, [
@@ -340,6 +348,7 @@ const claude = {
     ...(opts.autocompact === null ? {} : { autocompact: opts.autocompact }),
     timeout: opts.timeout,
     readOnly: opts.readOnly,
+    projectSettings: opts.projectSettings,
     resumed: Boolean(opts.resumeLast || opts.session),
     resumeLast: opts.resumeLast,
     permissionMode: state.permissionMode,
