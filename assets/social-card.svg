@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1d23"/><stop offset="1" stop-color="#121419"/>
+    </linearGradient>
+    <pattern id="holes" width="56" height="56" patternUnits="userSpaceOnUse">
+      <circle cx="28" cy="28" r="6" fill="#0f1114" stroke="#c8a24a" stroke-opacity=".22" stroke-width="1.5"/>
+    </pattern>
+    <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <rect width="1280" height="640" fill="url(#g)"/>
+  <rect width="1280" height="640" fill="url(#holes)" opacity=".55"/>
+  <rect x="960" y="60" width="270" height="500" rx="18" fill="#121419" stroke="#c8a24a" stroke-opacity=".35" stroke-width="2"/>
+  <circle cx="1010" cy="110" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1036" cy="86" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1090" cy="110" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1116" cy="86" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1170" cy="110" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1196" cy="86" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1010" cy="190" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1036" cy="166" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1090" cy="190" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1116" cy="166" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1170" cy="190" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1196" cy="166" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1010" cy="270" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1036" cy="246" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1090" cy="270" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1116" cy="246" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1170" cy="270" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1196" cy="246" r="5" fill="#ffb020" fill-opacity="1"/><circle cx="1010" cy="350" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1036" cy="326" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1090" cy="350" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1116" cy="326" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1170" cy="350" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1196" cy="326" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1010" cy="430" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1036" cy="406" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1090" cy="430" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1116" cy="406" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1170" cy="430" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1196" cy="406" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1010" cy="510" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1036" cy="486" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1090" cy="510" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1116" cy="486" r="5" fill="#efe9dc" fill-opacity="0.14"/><circle cx="1170" cy="510" r="15" fill="#0c0d10" stroke="#c8a24a" stroke-opacity=".75" stroke-width="3"/><circle cx="1196" cy="486" r="5" fill="#efe9dc" fill-opacity="0.14"/>
+  <circle cx="1196" cy="246" r="12" fill="#ffb020" opacity=".55" filter="url(#glow)"/>
+  <path d="M1050 640 C 1040 520, 1180 430, 1170 270" fill="none" stroke="#ffb020" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="1170" cy="270" r="17" fill="#ffb020"/>
+  <g transform="translate(80 84)">
+    <rect x="2" y="2" width="68" height="68" rx="14" fill="#121419" stroke="#c8a24a" stroke-opacity=".55" stroke-width="2"/>
+    <circle cx="53" cy="18" r="5" fill="#0c0d10" stroke="#c8a24a" stroke-width="2.2"/>
+    <circle cx="53" cy="36" r="5" fill="#0c0d10" stroke="#c8a24a" stroke-width="2.2"/>
+    <circle cx="19" cy="36" r="6.2" fill="#0c0d10" stroke="#c8a24a" stroke-width="2.8"/>
+    <path d="M19 36 C19 63 53 65 53 54" fill="none" stroke="#ffb020" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="53" cy="54" r="5.6" fill="#ffb020"/>
+    <text x="96" y="54" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="52" letter-spacing="4" fill="#efe9dc">SWITCHBOARD</text>
+  </g>
+  <text x="80" y="320" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="104" fill="#efe9dc">HAND OFF THE CODE.</text>
+  <text x="80" y="428" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="104" fill="#ffb020">KEEP THE JUDGMENT.</text>
+  <text x="80" y="512" font-family="'IBM Plex Sans','Segoe UI',Arial,sans-serif" font-size="29" fill="#ece6d8">Route tasks to 7 CLI coding agents. Review every diff. Land it yourself.</text>
+  <text x="80" y="570" font-family="'IBM Plex Mono',Menlo,monospace" font-size="24" fill="#ffb020">$ npx skills add 0xBassia/switchboard</text>
+</svg>

@@ -1,0 +1,51 @@
+{
+  "schema": "baton-verify.v1",
+  "date": "2026-10-18",
+  "platform": "Linux",
+  "osRelease": "6.18.44-fc-v139",
+  "node": "v22.22.0",
+  "results": [
+    {
+      "key": "claude",
+      "skill": "claude-delegate",
+      "binary": "claude",
+      "version": "2.1.302 (Claude Code)",
+      "checks": [
+        {
+          "kind": "read-only",
+          "passed": true,
+          "detail": "status completed, tree unchanged, readOnlyViolation false",
+          "seconds": 7,
+          "status": "completed",
+          "exitCode": 0,
+          "tokens": {
+            "input": 6,
+            "output": 290,
+            "cacheRead": 19468,
+            "cacheWrite": 3194,
+            "reasoning": null
+          },
+          "totalCostUsd": 0.0176348,
+          "resultPath": "/tmp/baton-verify-out-HgKf3o/result.json"
+        },
+        {
+          "kind": "write",
+          "passed": true,
+          "detail": "status completed, baton-check.txt \"baton ok\", touchedFiles reports it",
+          "seconds": 9,
+          "status": "completed",
+          "exitCode": 0,
+          "tokens": {
+            "input": 4,
+            "output": 355,
+            "cacheRead": 9945,
+            "cacheWrite": 10227,
+            "reasoning": null
+          },
+          "totalCostUsd": 0.00232275,
+          "resultPath": "/tmp/baton-verify-out-Cx77ih/result.json"
+        }
+      ]
+    }
+  ]
+}

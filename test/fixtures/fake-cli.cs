@@ -1,0 +1,95 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+class FakeCli {
+  static int Main(string[] args) {
+    // Mirrors the .cjs fake: any probe form, and hang/fail selected by the mode's suffix,
+    // so a native-binary relay (oz, omp) enters the same preflight matrix.
+    var mode = Environment.GetEnvironmentVariable("SMOKE_MODE") ?? "";
+    bool versionProbe = Array.IndexOf(args, "--version") >= 0
+      || (args.Length > 0 && (args[0] == "version" || args[0] == "changelog"));
+    if (versionProbe && mode.EndsWith("-version-hang")) {
+      Thread.Sleep(Timeout.Infinite);
+      return 1;
+    }
+    if (versionProbe && mode.EndsWith("-version-fail-silent")) {
+      return 7;
+    }
+    if (versionProbe && mode.EndsWith("-version-fail")) {
+      Console.Error.WriteLine("fake version failure");
+      return 7;
+    }
+    if (versionProbe) {
+      Console.WriteLine("fake-cli 0.0.0-smoke");
+      return 0;
+    }
+    var forwardedArgsFile = Environment.GetEnvironmentVariable("SMOKE_FORWARD_ARGS_FILE");
+    if (!String.IsNullOrEmpty(forwardedArgsFile)) File.WriteAllLines(forwardedArgsFile, args);
+    if (Environment.GetEnvironmentVariable("SMOKE_MODE") == "capture") {
+      File.WriteAllLines(Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE"), args);
+      return 0;
+    }
+    var writeFile = Environment.GetEnvironmentVariable("SMOKE_WRITE_FILE");
+    if (!String.IsNullOrEmpty(writeFile)) File.WriteAllText(writeFile, "written by fake cli\n");
+    if (mode == "omp-success" || mode == "omp-error") {
+      var brief = Console.In.ReadToEnd() ?? "";
+      var failed = mode == "omp-error";
+      var argsFile = Environment.GetEnvironmentVariable("SMOKE_ARGS_FILE");
+      if (!String.IsNullOrEmpty(argsFile)) {
+        var payload = new System.Text.StringBuilder();
+        payload.Append("{\"args\":[");
+        for (int i = 0; i < args.Length; i++) {
+          if (i > 0) payload.Append(",");
+          payload.Append(JsonString(args[i]));
+        }
+        payload.Append("],\"brief\":");
+        payload.Append(JsonString(brief));
+        payload.Append("}");
+        File.WriteAllText(argsFile, payload.ToString());
+      }
+      Console.WriteLine("{\"type\":\"session\",\"version\":3,\"id\":\"omp-session-1\",\"timestamp\":\"2026-01-01T00:00:00.000Z\"}");
+      Console.WriteLine("{\"type\":\"agent_start\"}");
+      if (failed) {
+        Console.WriteLine("{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"fake omp failed\"}],\"provider\":\"google\",\"model\":\"fake-model\",\"usage\":{\"input\":7,\"output\":2,\"cacheRead\":1,\"cacheWrite\":0,\"totalTokens\":10,\"cost\":{\"total\":0.001}},\"stopReason\":\"error\",\"errorMessage\":\"fake provider failure\"}}");
+      } else {
+        Console.WriteLine("{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"fake omp completed\"}],\"provider\":\"google\",\"model\":\"fake-model\",\"usage\":{\"input\":7,\"output\":2,\"cacheRead\":1,\"cacheWrite\":0,\"totalTokens\":10,\"cost\":{\"total\":0.001}},\"stopReason\":\"stop\"}}");
+      }
+      Console.WriteLine("{\"type\":\"agent_end\",\"messages\":[]}");
+      return 0;
+    }
+    if (mode == "orphan-holds-stdio") {
+      var logAt = Array.IndexOf(args, "--log-file");
+      if (logAt >= 0) File.WriteAllText(args[logAt + 1], "fake implementer log\n");
+      Console.WriteLine("fake implementer completed");
+      var outAt = Array.IndexOf(args, "-o");
+      if (outAt >= 0) File.WriteAllText(args[outAt + 1].Trim('"'), "fake codex completed\n");
+      var delayMs = 0;
+      int.TryParse(Environment.GetEnvironmentVariable("SMOKE_ORPHAN_EXIT_DELAY_MS") ?? "0", out delayMs);
+      var orphanPsi = new ProcessStartInfo {
+        FileName = Environment.GetEnvironmentVariable("SMOKE_NODE") ?? "node",
+        Arguments = "-e setTimeout(()=>{},60000)",
+        UseShellExecute = false,
+      };
+      var orphan = Process.Start(orphanPsi);
+      var orphanPidFile = Environment.GetEnvironmentVariable("SMOKE_GRAND_PID_FILE");
+      if (!String.IsNullOrEmpty(orphanPidFile) && orphan != null) File.WriteAllText(orphanPidFile, orphan.Id.ToString());
+      if (delayMs > 0) Thread.Sleep(delayMs);
+      return 0;
+    }
+    var psi = new ProcessStartInfo {
+      FileName = Environment.GetEnvironmentVariable("SMOKE_NODE"),
+      Arguments = "-e setInterval(()=>{},1000)",
+      UseShellExecute = false,
+    };
+    var grand = Process.Start(psi);
+    File.WriteAllText(Environment.GetEnvironmentVariable("SMOKE_GRAND_PID_FILE"), grand.Id.ToString());
+    File.WriteAllText(Environment.GetEnvironmentVariable("SMOKE_PID_FILE"), Process.GetCurrentProcess().Id.ToString());
+    Thread.Sleep(Timeout.Infinite);
+    return 0;
+  }
+  static string JsonString(string s) {
+    if (s == null) s = "";
+    return "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
+  }
+}

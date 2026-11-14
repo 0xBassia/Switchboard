@@ -1,0 +1,32 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "Switchboard: delegate to CLI agents",
+      "description": "Delegate a coding task to a CLI implementer agent, then review the diff and commit it yourself.",
+      "skills": [
+        "switchboard-claude",
+        "switchboard-codex",
+        "switchboard-cursor",
+        "switchboard-opencode",
+        "switchboard-pi",
+        "switchboard-omp",
+        "switchboard-warp"
+      ]
+    },
+    {
+      "title": "Switchboard: setup",
+      "description": "Configure fleet lanes: which implementer handles which kind of work.",
+      "skills": [
+        "switchboard-setup"
+      ]
+    },
+    {
+      "title": "Switchboard: queue",
+      "description": "Run a batch of briefs in parallel across implementers, each in its own git worktree, with fallback.",
+      "skills": [
+        "switchboard-queue"
+      ]
+    }
+  ]
+}

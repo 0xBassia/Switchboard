@@ -1,0 +1,39 @@
+name: pages
+
+# Publishes site/ (the landing page) to GitHub Pages.
+# Manual until Pages is enabled (Settings -> Pages -> Source: "GitHub Actions";
+# a private repository needs a paid plan). After that, add a push trigger:
+#   push: { branches: [main], paths: ["site/**", "assets/**"] }
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: assemble the site
+        run: |
+          mkdir -p _site/assets
+          cp site/index.html _site/
+          cp assets/*.svg assets/*.png _site/assets/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

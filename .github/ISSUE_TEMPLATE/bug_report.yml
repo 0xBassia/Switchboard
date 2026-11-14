@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a problem with an implementer skill or relay
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: skill
+    attributes:
+      label: Skill
+      placeholder: switchboard-codex
+    validations:
+      required: true
+  - type: input
+    id: cli
+    attributes:
+      label: Implementer CLI and version
+      placeholder: codex 0.150.1
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS
+        - Linux
+        - Windows (native)
+        - Windows (WSL/Git Bash)
+  - type: textarea
+    id: command
+    attributes:
+      label: Command run
+      render: shell
+  - type: textarea
+    id: result
+    attributes:
+      label: result.json
+      description: Remove anything private before pasting.
+      render: json
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened vs expected
+    validations:
+      required: true
