@@ -11,7 +11,7 @@ description: >-
 license: MIT
 compatibility: Requires the `omp` CLI installed and authenticated (`/login` inside omp, or a provider API-key environment variable), Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). Shell examples assume bash/zsh.
 metadata:
-  version: 1.1.0
+  version: 1.0.0
 ---
 
 # Oh My Pi Delegate

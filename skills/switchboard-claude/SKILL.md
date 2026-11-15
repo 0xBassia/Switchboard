@@ -10,7 +10,7 @@ description: >-
 license: MIT
 compatibility: Requires the `claude` CLI (Claude Code) installed and authenticated, Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). The optional --autocompact flag requires claude 2.1.221 or newer.
 metadata:
-  version: 1.1.0
+  version: 1.0.0
 ---
 
 # Claude Delegate

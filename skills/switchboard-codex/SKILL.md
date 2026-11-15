@@ -11,7 +11,7 @@ description: >-
 license: MIT
 compatibility: Requires the `codex` CLI (OpenAI Codex) installed and authenticated, Node 18+, and git 2.31+. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). Shell examples assume bash/zsh.
 metadata:
-  version: 1.1.0
+  version: 1.0.0
 ---
 
 # Codex Delegate

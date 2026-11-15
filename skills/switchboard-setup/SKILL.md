@@ -10,7 +10,7 @@ description: >-
 license: MIT
 compatibility: Requires Node 18+. No implementer CLIs are required — the skill discovers what is available. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).
 metadata:
-  version: 1.1.0
+  version: 1.0.0
 ---
 
 # Switchboard Setup

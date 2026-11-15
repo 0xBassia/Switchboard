@@ -10,7 +10,7 @@ description: >-
 license: MIT
 compatibility: Requires the `cursor-agent` CLI installed and authenticated, Node 18+, and git 2.31+. The optional `--add-dir` flag requires cursor-agent 2026.07.23 or newer. The orchestrating agent must be able to run shell commands and read files. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL). Shell examples assume bash/zsh.
 metadata:
-  version: 1.1.0
+  version: 1.0.0
 ---
 
 # Cursor Delegate
