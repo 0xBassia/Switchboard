@@ -3,7 +3,7 @@
   "groupings": [
     {
       "title": "Switchboard: delegate to CLI agents",
-      "description": "Delegate a coding task to a CLI implementer agent, then review the diff and commit it yourself.",
+      "description": "Delegate coding tasks from your agent to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi or Warp, then review the diff and commit it yourself.",
       "skills": [
         "switchboard-claude",
         "switchboard-codex",
@@ -16,14 +16,14 @@
     },
     {
       "title": "Switchboard: setup",
-      "description": "Configure fleet lanes: which implementer handles which kind of work.",
+      "description": "Discover installed coding-agent CLIs and route each kind of work (features, tests, UI, reviews) to the right one.",
       "skills": [
         "switchboard-setup"
       ]
     },
     {
       "title": "Switchboard: queue",
-      "description": "Run a batch of briefs in parallel across implementers, each in its own git worktree, with fallback.",
+      "description": "Run several coding tasks in parallel across coding agents, each in its own git worktree, with fallback and cross-review.",
       "skills": [
         "switchboard-queue"
       ]

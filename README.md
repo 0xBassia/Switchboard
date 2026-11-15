@@ -1,13 +1,17 @@
 <p align="center">
-  <img src="assets/social-card.png" alt="Switchboard: hand off the code, keep the judgment" width="100%">
+  <img src="assets/social-card.png" alt="Switchboard: delegate coding tasks from Claude Code, Codex or Cursor to 7 CLI coding agents and review every diff" width="100%">
 </p>
 
 # Switchboard
 
-[![relay smoke](https://img.shields.io/github/actions/workflow/status/0xBassia/switchboard/relays.yml?branch=main&label=relay%20smoke)](https://github.com/0xBassia/switchboard/actions/workflows/relays.yml)
+[![relay smoke](https://img.shields.io/github/actions/workflow/status/0xBassia/switchboard/relays.yml?branch=main&label=relay%20smoke)](https://github.com/0xBassia/Switchboard/actions/workflows/relays.yml)
 [![License](https://img.shields.io/github/license/0xBassia/switchboard)](LICENSE)
 
 **Hand off the code. Keep the judgment.**
+
+Switchboard is a set of open-source agent skills that let Claude Code, Codex, Cursor or any agent
+that runs shell commands delegate coding tasks to other CLI coding agents, run several of them in
+parallel git worktrees, and review every diff before it lands.
 
 Switchboard lets the coding agent you already work with delegate a task to any of 7 CLI coding agents:
 Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi and Warp. The implementer does the typing.
@@ -396,6 +400,43 @@ row, and a verification line once a run backs it.
 
 Contributing? House rules, the controlled vocabulary, and the pre-publish checklist live in
 [AGENTS.md](AGENTS.md) — read it before opening a pull request, and point your agent at it too.
+
+## FAQ
+
+### How do I run Codex from Claude Code?
+
+Install Switchboard, then ask Claude Code to use the Codex skill: `Use $switchboard-codex to
+implement the refactor in services/billing/, then review and commit it.` Claude Code writes the
+brief, the relay runs `codex exec`, and Claude Code reviews the diff and re-runs your tests before
+it commits.
+
+### Can Claude Code use Cursor, OpenCode or another agent as a subagent?
+
+Yes. Each supported CLI has its own skill (`switchboard-cursor`, `switchboard-opencode`,
+`switchboard-pi`, `switchboard-omp`, `switchboard-warp`, and `switchboard-claude` for a separate
+Claude Code session). The same works the other way: Codex or Cursor can orchestrate and hand work
+to Claude Code.
+
+### How do I run several coding agents in parallel?
+
+Use `switchboard-queue`. It runs a batch of briefs at once, each in its own git worktree, falls
+back to another agent when one is missing, and can have a second agent review each result. See
+[Run tasks in parallel](#run-tasks-in-parallel).
+
+### Does Switchboard commit or push for me?
+
+No. Relays never commit. The orchestrating agent reviews the diff, re-runs your project's gates,
+and lands the change itself.
+
+### Which platforms are supported?
+
+macOS, Linux and WSL. Native Windows is not supported; run it inside WSL.
+
+### Is it safe to point at an untrusted branch?
+
+Use a read-only run. The relay checks that nothing in the Git working tree changed and reports
+any write as a violation. See [Trust and validation](#trust-and-validation) for what is and is
+not covered.
 
 ## License
 

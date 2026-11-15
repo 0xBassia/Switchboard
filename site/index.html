@@ -3,13 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta property="og:title" content="Switchboard">
-<meta property="og:description" content="Hand off the code. Keep the judgment. Delegate to 7 CLI coding agents, review every diff, land it yourself.">
-<meta property="og:image" content="https://raw.githubusercontent.com/0xBassia/switchboard/main/assets/social-card.png">
+<title>Switchboard: delegate coding tasks from Claude Code to Codex, Cursor and other CLI agents</title>
+<meta name="description" content="Agent skills that let Claude Code, Codex or Cursor hand coding tasks to 7 CLI coding agents, run them in parallel git worktrees, and review every diff before it lands. Open source, MIT.">
+<link rel="canonical" href="https://0xbassia.github.io/Switchboard/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://0xbassia.github.io/Switchboard/">
+<meta property="og:site_name" content="Switchboard">
+<meta property="og:title" content="Switchboard: delegate coding tasks to CLI coding agents">
+<meta property="og:description" content="Let your coding agent hand tasks to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi or Warp, then review every diff and land it yourself.">
+<meta property="og:image" content="https://0xbassia.github.io/Switchboard/assets/social-card.png">
+<meta property="og:image:alt" content="Switchboard: route coding tasks to 7 CLI coding agents and review every diff">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="https://raw.githubusercontent.com/0xBassia/switchboard/main/assets/logo.svg" type="image/svg+xml">
-<title>Switchboard</title>
-<meta name="description" content="Switchboard lets your coding agent hand a task to any of 7 CLI coding agents, then review the diff and land it yourself.">
+<meta name="twitter:title" content="Switchboard: delegate coding tasks to CLI coding agents">
+<meta name="twitter:description" content="Let your coding agent hand tasks to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi or Warp, then review every diff and land it yourself.">
+<meta name="twitter:image" content="https://0xbassia.github.io/Switchboard/assets/social-card.png">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Switchboard",
+  "description": "Agent skills that let a coding agent delegate tasks to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi and Warp, run them in parallel git worktrees, and review every diff before it lands.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS, Linux, WSL",
+  "url": "https://0xbassia.github.io/Switchboard/",
+  "codeRepository": "https://github.com/0xBassia/Switchboard",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Mohamed Bassia", "url": "https://github.com/0xBassia" }
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -76,6 +100,8 @@ code, pre, .mono { font-family: var(--mono); }
   overflow: hidden;
 }
 .hero .wrap { padding-block: 72px 64px; display: grid; gap: 40px; position: relative; z-index: 1; }
+/* Grid items default to min-width: auto, so the one-line install command would widen the column past a phone screen. */
+.hero .wrap > * { min-width: 0; }
 .hero nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 12px; font-family: var(--display); font-weight: 900; font-size: 30px; letter-spacing: 0.06em; text-decoration: none; }
 .brand svg { width: 40px; height: 40px; flex: none; }
@@ -229,7 +255,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
         <a href="#how">How it works</a>
         <a href="#agents">Agents</a>
         <a href="#guarantees">Guarantees</a>
-        <a href="https://github.com/0xBassia/switchboard">GitHub</a>
+        <a href="https://github.com/0xBassia/Switchboard">GitHub</a>
       </div>
     </nav>
     <h1>Hand off the code. <em>Keep the judgment.</em></h1>
@@ -239,7 +265,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
         <code id="install-cmd">npx skills add 0xBassia/switchboard</code>
         <button type="button" id="copy-btn">Copy</button>
       </div>
-      <a class="gh" href="https://github.com/0xBassia/switchboard">Read the source on GitHub</a>
+      <a class="gh" href="https://github.com/0xBassia/Switchboard">Read the source on GitHub</a>
     </div>
   </div>
 </header>
@@ -406,7 +432,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
 <footer>
   <div class="wrap">
     <span>Switchboard is MIT licensed. Node built-ins only. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).</span>
-    <a href="https://github.com/0xBassia/switchboard">github.com/0xBassia/switchboard</a>
+    <a href="https://github.com/0xBassia/Switchboard">github.com/0xBassia/switchboard</a>
   </div>
 </footer>
 
