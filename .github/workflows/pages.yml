@@ -1,6 +1,6 @@
 name: pages
 
-# Publishes site/ (the landing page) to GitHub Pages at https://0xbassia.github.io/Switchboard/.
+# Publishes site/ (the landing page) to GitHub Pages at https://0xbassia.github.io/Delegit/.
 # Needs Settings -> Pages -> Source: "GitHub Actions".
 on:
   push:

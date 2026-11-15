@@ -7,7 +7,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { tmpdir } from "node:os";
 import { fail } from "./cli.mjs";
 
-export const RESULT_SCHEMA = "switchboard-relay.result.v1";
+export const RESULT_SCHEMA = "delegit-relay.result.v1";
 
 export function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
@@ -89,7 +89,7 @@ export function prepareRunDir(opts, brief, extra = {}) {
     if (outDir) {
       mkdirSync(outDir, { recursive: true, mode: 0o700 });
     } else {
-      const parent = join(tmpdir(), "switchboard-relay");
+      const parent = join(tmpdir(), "delegit-relay");
       mkdirSync(parent, { recursive: true, mode: 0o700 });
       outDir = mkdtempSync(join(parent, `${basename(opts.cd) || "repo"}-${timestamp()}-`));
     }

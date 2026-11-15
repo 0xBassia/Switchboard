@@ -1,5 +1,5 @@
 /**
- * Switchboard · switchboard-omp · relay.mjs
+ * Delegit · delegit-omp · relay.mjs
  *
  * Dispatch a self-contained brief to Oh My Pi (`omp --mode json`), capture the
  * JSON event stream, and write a structured result the orchestrating agent can
@@ -39,7 +39,7 @@
  * Options:
  *   --brief <file>          Path to the brief. If omitted, read it from stdin.
  *   --cd <dir>              Working root for omp (default: current directory).
- *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from delegit-setup config (dials apply; explicit flags win).
  *   --provider <name>       omp provider name (default: omp's own default).
  *   --model <pattern>       omp model id or fuzzy pattern (default: omp's own
  *                           default). List ids with `omp models`, not

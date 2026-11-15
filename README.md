@@ -1,25 +1,25 @@
 <p align="center">
-  <img src="assets/social-card.png" alt="Switchboard: delegate coding tasks from Claude Code, Codex or Cursor to 7 CLI coding agents and review every diff" width="100%">
+  <img src="assets/social-card.png" alt="Delegit: delegate coding tasks from Claude Code, Codex or Cursor to 7 CLI coding agents and review every diff" width="100%">
 </p>
 
-# Switchboard
+# Delegit
 
-[![relay smoke](https://img.shields.io/github/actions/workflow/status/0xBassia/switchboard/relays.yml?branch=main&label=relay%20smoke)](https://github.com/0xBassia/Switchboard/actions/workflows/relays.yml)
-[![License](https://img.shields.io/github/license/0xBassia/switchboard)](LICENSE)
+[![relay smoke](https://img.shields.io/github/actions/workflow/status/0xBassia/delegit/relays.yml?branch=main&label=relay%20smoke)](https://github.com/0xBassia/Delegit/actions/workflows/relays.yml)
+[![License](https://img.shields.io/github/license/0xBassia/delegit)](LICENSE)
 
 **Hand off the code. Keep the judgment.**
 
-Switchboard is a set of open-source agent skills that let Claude Code, Codex, Cursor or any agent
+Delegit is a set of open-source agent skills that let Claude Code, Codex, Cursor or any agent
 that runs shell commands delegate coding tasks to other CLI coding agents, run several of them in
 parallel git worktrees, and review every diff before it lands.
 
-Switchboard lets the coding agent you already work with delegate a task to any of 7 CLI coding agents:
+Delegit lets the coding agent you already work with delegate a task to any of 7 CLI coding agents:
 Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi and Warp. The implementer does the typing.
 Your agent gets back a structured report and the diff, re-runs your project's tests, and lands the
 work itself. Nothing is committed without that review.
 
 ```bash
-npx skills add 0xBassia/switchboard
+npx skills add 0xBassia/delegit
 ```
 
 Requires Node 18+, git 2.31+, and at least one implementer CLI on your PATH (see [Requirements](#requirements)).
@@ -27,18 +27,18 @@ Requires Node 18+, git 2.31+, and at least one implementer CLI on your PATH (see
 Then ask your orchestrating agent to set up lanes:
 
 ```text
-Use $switchboard-setup to discover my installed implementer CLIs and create a fleet for feature, tests, and UI work.
+Use $delegit-setup to discover my installed implementer CLIs and create a fleet for feature, tests, and UI work.
 ```
 
 Or delegate directly:
 
 ```text
-Use $switchboard-codex to have Codex implement the refactor in services/billing/, then review and commit it.
+Use $delegit-codex to have Codex implement the refactor in services/billing/, then review and commit it.
 ```
 
 ```mermaid
 flowchart LR
-  S["$switchboard-setup<br/>discover → propose → approve"] --> F["Example fleet"]
+  S["$delegit-setup<br/>discover → propose → approve"] --> F["Example fleet"]
   O["Your orchestrator"] --> F
   F -->|"feature"| A["OpenCode"]
   F -->|"tests"| B["Codex"]
@@ -49,10 +49,10 @@ flowchart LR
   R --> L["You land the commit"]
 ```
 
-## Why Switchboard
+## Why Delegit
 
 - **7 implementers, one result format.** Each CLI is its own skill with its real flags. Every run
-  writes the same `switchboard-relay.result.v1` record, so your agent reviews them all the same way.
+  writes the same `delegit-relay.result.v1` record, so your agent reviews them all the same way.
 - **One engine under every relay.** All relays are generated from a shared engine in `src/core/`, so
   a safeguard lands for every implementer at once:
   - `result.json` is written atomically on every outcome: completed, failed, timeout, stalled,
@@ -68,7 +68,7 @@ flowchart LR
     [Trust and validation](#trust-and-validation));
   - token counts and cost land in one `tokens` / `totalCostUsd` shape wherever the CLI reports them.
 - **Lanes.** Route reviews, refactors and bulk work to different implementers with
-  `switchboard-fleet.v1` lanes. Setup writes nothing until you approve.
+  `delegit-fleet.v1` lanes. Setup writes nothing until you approve.
 - **You keep the commit.** Relays never commit. Your agent reviews, re-runs the gates, and lands.
 - **Inspectable.** Each relay is one readable Node file: no dependencies, no telemetry, no network
   calls of its own.
@@ -79,7 +79,7 @@ flowchart LR
 
 | Skill | Job |
 | --- | --- |
-| [`switchboard-setup`](skills/switchboard-setup/SKILL.md) | Discover installed CLIs, propose **fleet lanes**, and write global or project config after you approve. Never dispatches work. |
+| [`delegit-setup`](skills/delegit-setup/SKILL.md) | Discover installed CLIs, propose **fleet lanes**, and write global or project config after you approve. Never dispatches work. |
 
 A **fleet** is your set of named lanes. Each **lane** binds a kind of work to one implementer and
 optional dials such as model, effort, or variant. Setup discovers what is available, proposes a compact
@@ -89,7 +89,7 @@ Configuration can apply globally or to one repository. Once it is ready, dispatc
 implementer skill and `--lane <name>`. Explicit flags override lane dials, and the wrong implementer
 skill for a lane fails loud. Project config is content-bound to explicit setup approval, so cloned or
 edited project lanes fail closed until re-approved. See the
-[`switchboard-fleet.v1` schema](skills/switchboard-setup/references/schema.md) for paths, supported dials,
+[`delegit-fleet.v1` schema](skills/delegit-setup/references/schema.md) for paths, supported dials,
 and overlay behavior.
 
 ### Delegate directly
@@ -98,27 +98,27 @@ Skip setup when you want one implementer or one-off dials. Pick the skill for a 
 
 | Skill | Implementer CLI | Write access (default) | Read-only run | Resume |
 | --- | --- | --- | --- | --- |
-| [`switchboard-claude`](skills/switchboard-claude/SKILL.md) | [Claude Code](https://code.claude.com/docs/en/overview) (`claude`) | `acceptEdits` + explicit tool surface | `--read-only` (`plan` mode) | `--resume-last`, `--session <id>` |
-| [`switchboard-codex`](skills/switchboard-codex/SKILL.md) | [OpenAI Codex](https://github.com/openai/codex) (`codex`) | `--sandbox workspace-write` | `--read-only` | `--resume-last`, `--session <id>` |
-| [`switchboard-cursor`](skills/switchboard-cursor/SKILL.md) | [Cursor Agent](https://cursor.com/cli) (`cursor-agent`) | `--force`; `--no-force` withholds command approval | `--read-only` (plan mode) | `--resume-last`, `--session <id>` |
-| [`switchboard-opencode`](skills/switchboard-opencode/SKILL.md) | [OpenCode](https://opencode.ai) (`opencode`) | agent `build` (`--model` required) | `--read-only` (agent `plan`) | `--resume-last`, `--session <id>` |
-| [`switchboard-pi`](skills/switchboard-pi/SKILL.md) | [Pi](https://github.com/earendil-works/pi-mono) (`pi`) | full local tools — no sandbox, no permission modes [^none]; project trust opt-in | `--read-only` (`read,grep,find,ls`) | `--resume-last`, `--session <id>` |
-| [`switchboard-omp`](skills/switchboard-omp/SKILL.md) | [Oh My Pi](https://github.com/can1357/oh-my-pi) (`omp`) | `--yolo` (`tools.approvalMode: yolo`); project `.omp` extras off unless `--approve` | `--read-only` (`read,grep,glob`) | `--resume-last`, `--session <id>` |
-| [`switchboard-warp`](skills/switchboard-warp/SKILL.md) | [Warp Agent CLI](https://docs.warp.dev/cli/) (`oz`) | full local tools — no sandbox, no permission modes [^none] | — [^none] | `--conversation <id>` |
+| [`delegit-claude`](skills/delegit-claude/SKILL.md) | [Claude Code](https://code.claude.com/docs/en/overview) (`claude`) | `acceptEdits` + explicit tool surface | `--read-only` (`plan` mode) | `--resume-last`, `--session <id>` |
+| [`delegit-codex`](skills/delegit-codex/SKILL.md) | [OpenAI Codex](https://github.com/openai/codex) (`codex`) | `--sandbox workspace-write` | `--read-only` | `--resume-last`, `--session <id>` |
+| [`delegit-cursor`](skills/delegit-cursor/SKILL.md) | [Cursor Agent](https://cursor.com/cli) (`cursor-agent`) | `--force`; `--no-force` withholds command approval | `--read-only` (plan mode) | `--resume-last`, `--session <id>` |
+| [`delegit-opencode`](skills/delegit-opencode/SKILL.md) | [OpenCode](https://opencode.ai) (`opencode`) | agent `build` (`--model` required) | `--read-only` (agent `plan`) | `--resume-last`, `--session <id>` |
+| [`delegit-pi`](skills/delegit-pi/SKILL.md) | [Pi](https://github.com/earendil-works/pi-mono) (`pi`) | full local tools — no sandbox, no permission modes [^none]; project trust opt-in | `--read-only` (`read,grep,find,ls`) | `--resume-last`, `--session <id>` |
+| [`delegit-omp`](skills/delegit-omp/SKILL.md) | [Oh My Pi](https://github.com/can1357/oh-my-pi) (`omp`) | `--yolo` (`tools.approvalMode: yolo`); project `.omp` extras off unless `--approve` | `--read-only` (`read,grep,glob`) | `--resume-last`, `--session <id>` |
+| [`delegit-warp`](skills/delegit-warp/SKILL.md) | [Warp Agent CLI](https://docs.warp.dev/cli/) (`oz`) | full local tools — no sandbox, no permission modes [^none] | — [^none] | `--conversation <id>` |
 
 [^none]: No CLI-enforced read-only mode. `touchedFiles` and the diff are what you review against, not
 a guarantee: they are post-run `git status` in the workspace, so they cannot show ignored files,
 reverted edits, or writes outside the repository.
 
 Each skill name links to its `SKILL.md`, which owns that implementer's prerequisites, flags, and
-caveats. Building one for another CLI? [Claim it first](https://github.com/0xBassia/Switchboard/issues?q=is%3Aissue+label%3Aimplementer),
+caveats. Building one for another CLI? [Claim it first](https://github.com/0xBassia/Delegit/issues?q=is%3Aissue+label%3Aimplementer),
 then see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Run tasks in parallel
 
-[`switchboard-queue`](skills/switchboard-queue/SKILL.md) runs a batch of briefs at once through the installed
+[`delegit-queue`](skills/delegit-queue/SKILL.md) runs a batch of briefs at once through the installed
 implementer relays, each task in its own git worktree, and writes one result file. A task names a
-`lane` (from `switchboard-setup`) or an `implementer`, and may list `fallback` targets that are tried only
+`lane` (from `delegit-setup`) or an `implementer`, and may list `fallback` targets that are tried only
 when the previous CLI was never dispatched (missing, or failed its version preflight). A run that started
 and then failed is reported, not retried. A task can set `"review"` to have a second implementer
 cross-review the result read-only; the queue is `completed` only if every review approves, and you still
@@ -126,7 +126,7 @@ review the diff yourself before you land it.
 
 ```json
 {
-  "version": "switchboard-queue.v1",
+  "version": "delegit-queue.v1",
   "concurrency": 3,
   "tasks": [
     { "id": "billing", "brief": "briefs/billing.md", "lane": "feature", "fallback": ["bulk"] },
@@ -159,15 +159,15 @@ Some limits to know:
 Browse first:
 
 ```bash
-npx skills add 0xBassia/switchboard --list
+npx skills add 0xBassia/delegit --list
 ```
 
 Install the package, the setup skill, or one implementer skill:
 
 ```bash
-npx skills add 0xBassia/switchboard
-npx skills add 0xBassia/switchboard --skill switchboard-setup
-npx skills add 0xBassia/switchboard --skill switchboard-codex
+npx skills add 0xBassia/delegit
+npx skills add 0xBassia/delegit --skill delegit-setup
+npx skills add 0xBassia/delegit --skill delegit-codex
 ```
 
 To pin an installation, append an existing release tag as `@vMAJOR.MINOR.PATCH`. The Skills CLI
@@ -176,8 +176,8 @@ installs by git ref, not by `metadata.version` in `SKILL.md`.
 Install for a specific agent, or globally:
 
 ```bash
-npx skills add 0xBassia/switchboard --skill switchboard-codex --agent claude-code
-npx skills add 0xBassia/switchboard --global
+npx skills add 0xBassia/delegit --skill delegit-codex --agent claude-code
+npx skills add 0xBassia/delegit --global
 ```
 
 Works with any orchestrating agent the [Skills CLI](https://github.com/vercel-labs/skills) supports.
@@ -194,12 +194,12 @@ review-first loop:
 5. **Land** it — *you* commit, because committing belongs to the reviewer.
 
 ```text
-Use $switchboard-claude to have a separate Claude Code session implement the parser fix, then review and commit it.
-Use $switchboard-opencode with --lane feature to implement the billing workflow, then review and commit it.
-Use $switchboard-codex to run this queue of migration tasks through Codex while I review each one.
+Use $delegit-claude to have a separate Claude Code session implement the parser fix, then review and commit it.
+Use $delegit-opencode with --lane feature to implement the billing workflow, then review and commit it.
+Use $delegit-codex to run this queue of migration tasks through Codex while I review each one.
 ```
 
-Every relay speaks the same `switchboard-relay.result.v1` contract: `status`, `exitCode`, `signal`
+Every relay speaks the same `delegit-relay.result.v1` contract: `status`, `exitCode`, `signal`
 (with a host-killed hint when the OOM killer ends a run), the implementer's own final report,
 `touchedFiles`, and a session id where the CLI exposes one. Learn the loop once, swap the implementer
 freely.
@@ -225,7 +225,7 @@ dispatch, poll, review, and land, across one task or a queue. It stays complemen
 plugin or subagents — those coordinate inside one agent; this keeps the contract portable across
 orchestrators, with the commit on the reviewer.
 
-`switchboard-setup` is the setup-skill exception: it discovers CLIs and writes an approved fleet map, but
+`delegit-setup` is the setup-skill exception: it discovers CLIs and writes an approved fleet map, but
 never dispatches coding work.
 
 Full checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -234,10 +234,10 @@ Full checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - For an implementer skill, its implementer CLI authenticated as you would at the terminal. Each
   implementer skill's `SKILL.md` carries its own install and login commands.
-- `switchboard-setup` requires no implementer CLI; it discovers whichever ones are available.
-- `switchboard-queue` requires the implementer skills for the implementers its tasks name, installed beside it.
+- `delegit-setup` requires no implementer CLI; it discovers whichever ones are available.
+- `delegit-queue` requires the implementer skills for the implementers its tasks name, installed beside it.
 - Node 18+ and `git` 2.31+. Relays switch Git's `core.fsmonitor` off, which older Git does not support.
-- For `switchboard-claude` write runs on Linux/WSL2: `bubblewrap` and `socat`, which Claude Code's shell
+- For `delegit-claude` write runs on Linux/WSL2: `bubblewrap` and `socat`, which Claude Code's shell
   sandbox needs. Without them the relay fails safe instead of running unsandboxed.
 - An orchestrating agent that can run shell commands and read files.
 - macOS, Linux and WSL; native Windows is not supported (use WSL). Every relay, the queue and the
@@ -251,12 +251,12 @@ This package is intentionally inspectable:
 - All skill content is Markdown, plus small Node scripts. Each implementer skill has exactly one
   `scripts/relay.mjs`, a complete, readable, standalone file generated from one shared engine
   (`src/core/`) plus a small per-CLI adapter (`src/adapters/`) by `tools/build.mjs`. The bundler
-  inlines only the code that relay uses, and CI fails if a shipped relay drifts from its source. The `switchboard-setup` utility ships `discover.mjs` / `config.mjs` / `lane.mjs`
+  inlines only the code that relay uses, and CI fails if a shipped relay drifts from its source. The `delegit-setup` utility ships `discover.mjs` / `config.mjs` / `lane.mjs`
   (and a shared implementer table) instead of a relay — it never dispatches coding work.
 - Those scripts make no network calls of their own, read or write no credentials, send no telemetry, and
   have no dependencies (Node built-ins only). Relays launch an implementer CLI and `git`, never through a
   shell.
-  The `switchboard-queue` utility ships one `queue.mjs` (Node built-ins only, no network calls of its own):
+  The `delegit-queue` utility ships one `queue.mjs` (Node built-ins only, no network calls of its own):
   it runs the sibling relays and `git worktree` / `git branch`, and never commits or forces a removal.
   Discover may invoke installed CLIs for `--version` / model list probes (those CLIs may contact their
   own services). Read the script before you run it.
@@ -270,11 +270,11 @@ This package is intentionally inspectable:
   `null` cases, for example a `--cd` that was not inside a Git repository when the run started (a
   repository the implementer creates during the run is never consulted).
 - Relays keep only absolute `PATH` entries, since an empty or relative entry would resolve inside the
-  checkout. `switchboard-setup` discovery does the same.
+  checkout. `delegit-setup` discovery does the same.
 - After the implementer exits, a relay sends SIGKILL to everything left in the implementer's process
   group. A background process the brief started, such as a dev server or a watcher, does not
   survive the run. A process that left the group (for example with `setsid`) is not covered.
-- `switchboard-claude` does not load the repository's `.claude/settings.json` or
+- `delegit-claude` does not load the repository's `.claude/settings.json` or
   `.claude/settings.local.json` (hooks included) by default: it passes `--setting-sources user`.
   `--project-settings` opts back in for a repository you trust, and `result.json` records it as
   `projectSettings`.
@@ -290,7 +290,7 @@ This package is intentionally inspectable:
 
 > **Shared-engine rewrite.** Every relay now runs on the shared engine in `src/core/`. The contract
 > suite (checks against a fake implementer CLI) covers all 7 relays and runs on Linux and macOS
-> CI. Entries marked "Switchboard live check" were recorded against the current relays with
+> CI. Entries marked "Delegit live check" were recorded against the current relays with
 > `node tools/verify-live.mjs` (the JSON record is in `verification/`). The other live runs below
 > predate the rewrite; repeat them before relying on a specific claim.
 
@@ -299,27 +299,27 @@ and signal reporting are verified, along with each implementer-specific guard.
 
 Per skill — platform, CLI version, and what the run exercised:
 
-- `switchboard-claude` — Linux, `claude` 2.1.302 (Claude Code): a `--read-only` dispatch completed and left the tree unchanged; a write dispatch created the briefed file and reported it in `touchedFiles` (Switchboard live check, 2026-10-18).
-- `switchboard-claude` — macOS, `claude` 2.1.220: write run under `acceptEdits`; plan mode refusing an
+- `delegit-claude` — Linux, `claude` 2.1.302 (Claude Code): a `--read-only` dispatch completed and left the tree unchanged; a write dispatch created the briefed file and reported it in `touchedFiles` (Delegit live check, 2026-10-18).
+- `delegit-claude` — macOS, `claude` 2.1.220: write run under `acceptEdits`; plan mode refusing an
   edit, with the Git tripwire true on a violation and false on a clean run;
   `--session`/`--resume-last` resume; `claude_unavailable`/127 and usage errors exiting 2 without a
   result file; deny rules and the shell sandbox blocking `git commit`, `git push`, `git -C <dir> push`,
   a nested `claude`, and a `$HOME` write.
   macOS, `claude` 2.1.271: `--autocompact` argument handling only. The installed CLI accepted `auto`, `400k`, `1M`, `200`, and `200000` and rejected `auto2`, `50k`, `2m`, `99`, `1000001`, and `0` with exit 1, each observed through `claude --autocompact <value> --help`, which validates the option and exits before any model call; `claude` 2.1.220 rejects the option itself with `unknown option '--autocompact'`, which is the documented 2.1.221 floor. The relay's pass-through, resume re-pass, and `result.json` record are contract-tested against the smoke matrix; no delegated run has been dispatched with `--autocompact` set.
-- `switchboard-cursor` — macOS, `cursor-agent` 2026.07.23-e383d2b: a maintainer-run plan-mode smoke
+- `delegit-cursor` — macOS, `cursor-agent` 2026.07.23-e383d2b: a maintainer-run plan-mode smoke
   captured model, session, and usage with no touched files. Write, `--session` resume, and
   `--read-only` runs are contract-tested. `--stall-timeout` is contract-tested; the live hang it targets was
   observed on Linux with `cursor-agent` 2026.10.01-e373342 (two runs silent after `thinking`
   `completed`, never exiting).
-- `switchboard-pi` — macOS: stdin brief delivery, explicit provider and model selection, JSON
+- `delegit-pi` — macOS: stdin brief delivery, explicit provider and model selection, JSON
   session/provider/model/usage capture, and a `--read-only` run leaving a clean tree. Write,
   `--session`, and `--resume-last` runs are contributor-reported.
-- `switchboard-omp` — contract-tested, live run pending: stdin brief delivery, `omp --mode json`
+- `delegit-omp` — contract-tested, live run pending: stdin brief delivery, `omp --mode json`
   argv (`--yolo`, `--tools read,grep,glob`, `--no-extensions --no-skills --no-rules`, `--thinking`),
   session header / `message_end` parsing, `--approve` omitting the project-trust flags, `--continue`
   resume, assistant `stopReason: error` reported as failed, `omp_unavailable`/127, and bounded
   `--version` preflight.
-- `switchboard-warp` — macOS, `oz` 0.2026.05.27.15.44.stable_01: **live edit run verified**. A relay
+- `delegit-warp` — macOS, `oz` 0.2026.05.27.15.44.stable_01: **live edit run verified**. A relay
   dispatch against a throwaway git repository had Warp add a function plus four assertions across
   two files; both project gates were re-run independently by the orchestrator, the diff matched the
   brief, and `HEAD` was untouched. Verified end to end: version preflight, launch, ndjson parsing
@@ -333,7 +333,7 @@ Per skill — platform, CLI version, and what the run exercised:
   narration rather than a distinct final-message event, and `--cwd` governed shell commands while
   the agent's file tool resolved bare relative paths against `$HOME`. `--no-snapshot`, `--profile`,
   `--skill` and `--conversation` are covered by the contract suite; `--mcp` is not yet.
-- `switchboard-codex` — macOS, `codex` codex-cli 0.150.1: fresh `workspace-write` dispatch against a
+- `delegit-codex` — macOS, `codex` codex-cli 0.150.1: fresh `workspace-write` dispatch against a
   throwaway repo created the briefed file and reported it in `touchedFiles`, with `status:
   "completed"` and exit 0; a `--read-only` dispatch left the tree clean (`touchedFiles: []`) and
   returned a `threadId`; a follow-up `--session <id>` resume against that thread was asked to recall
@@ -342,14 +342,14 @@ Per skill — platform, CLI version, and what the run exercised:
   just that the id was accepted. Contract-tested: argument validation,
   bounded version preflight, missing binary, result parsing, and whole-process-tree timeout/abort
   cleanup. No Linux run is recorded.
-- `switchboard-opencode` — contract-tested only: argument validation, bounded version
+- `delegit-opencode` — contract-tested only: argument validation, bounded version
   preflight, missing binary, result parsing, and whole-process-tree timeout/abort cleanup. No
   end-to-end run is recorded here.
-- `switchboard-setup` — contract-tested: discover JSON shape, config validate/write/load, whole-lane
-  project overlay, global write without creating `.switchboard/`, and `--lane` resolve / wrong-skill /
+- `delegit-setup` — contract-tested: discover JSON shape, config validate/write/load, whole-lane
+  project overlay, global write without creating `.delegit/`, and `--lane` resolve / wrong-skill /
   flag-override against relays. The smoke suite runs live discovery against installed CLIs
   (versions vary by machine).
-- `switchboard-queue` — contract-tested with fake implementer CLIs (`node --test test/queue.test.mjs`): usage
+- `delegit-queue` — contract-tested with fake implementer CLIs (`node --test test/queue.test.mjs`): usage
   errors, parallel worktrees, fallback only before dispatch, lanes, abort on SIGTERM, the concurrency cap,
   and cleanup. No live implementer run claimed.
 
@@ -365,14 +365,14 @@ Every relay is generated from one engine plus a per-CLI adapter (see [src/README
 src/
 ├── core/                 shared engine: intake, lanes, artifacts, preflight, watchdog, result
 └── adapters/<name>.mjs   one implementer CLI: flags, version probe, launch, events
-tools/build.mjs           bundles each adapter + core into skills/switchboard-<name>/scripts/relay.mjs
+tools/build.mjs           bundles each adapter + core into skills/delegit-<name>/scripts/relay.mjs
 ```
 
 Implementer skills share one shape; the utilities have different ones:
 
 ```text
 skills/
-├── switchboard-<name>/        claude, codex, cursor, opencode, pi, omp, warp
+├── delegit-<name>/        claude, codex, cursor, opencode, pi, omp, warp
 │   ├── SKILL.md
 │   ├── scripts/relay.mjs
 │   └── references/
@@ -380,10 +380,10 @@ skills/
 │       ├── dispatch-and-poll.md
 │       ├── review-and-land.md
 │       └── multi-task-queues.md
-├── switchboard-queue/
+├── delegit-queue/
 │   ├── SKILL.md
 │   └── scripts/queue.mjs
-└── switchboard-setup/
+└── delegit-setup/
     ├── SKILL.md
     ├── scripts/
     │   ├── discover.mjs
@@ -405,25 +405,25 @@ Contributing? House rules, the controlled vocabulary, and the pre-publish checkl
 
 ### How do I run Codex from Claude Code?
 
-Install Switchboard, then ask Claude Code to use the Codex skill: `Use $switchboard-codex to
+Install Delegit, then ask Claude Code to use the Codex skill: `Use $delegit-codex to
 implement the refactor in services/billing/, then review and commit it.` Claude Code writes the
 brief, the relay runs `codex exec`, and Claude Code reviews the diff and re-runs your tests before
 it commits.
 
 ### Can Claude Code use Cursor, OpenCode or another agent as a subagent?
 
-Yes. Each supported CLI has its own skill (`switchboard-cursor`, `switchboard-opencode`,
-`switchboard-pi`, `switchboard-omp`, `switchboard-warp`, and `switchboard-claude` for a separate
+Yes. Each supported CLI has its own skill (`delegit-cursor`, `delegit-opencode`,
+`delegit-pi`, `delegit-omp`, `delegit-warp`, and `delegit-claude` for a separate
 Claude Code session). The same works the other way: Codex or Cursor can orchestrate and hand work
 to Claude Code.
 
 ### How do I run several coding agents in parallel?
 
-Use `switchboard-queue`. It runs a batch of briefs at once, each in its own git worktree, falls
+Use `delegit-queue`. It runs a batch of briefs at once, each in its own git worktree, falls
 back to another agent when one is missing, and can have a second agent review each result. See
 [Run tasks in parallel](#run-tasks-in-parallel).
 
-### Does Switchboard commit or push for me?
+### Does Delegit commit or push for me?
 
 No. Relays never commit. The orchestrating agent reviews the diff, re-runs your project's gates,
 and lands the change itself.

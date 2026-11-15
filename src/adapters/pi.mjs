@@ -1,5 +1,5 @@
 /**
- * Switchboard · switchboard-pi · relay.mjs
+ * Delegit · delegit-pi · relay.mjs
  *
  * Dispatch a self-contained brief to the Pi coding agent CLI (`pi --mode json`),
  * capture the JSON event stream, and write a structured result the orchestrating
@@ -38,7 +38,7 @@
  * Options:
  *   --brief <file>          Path to the brief. If omitted, read it from stdin.
  *   --cd <dir>              Working root for pi (default: current directory).
- *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from delegit-setup config (dials apply; explicit flags win).
  *   --provider <name>       pi provider name (default: pi's own default).
  *   --model <pattern>       pi model id or pattern (default: pi's own default).
  *                           Letters, digits, and . _ : / - only.

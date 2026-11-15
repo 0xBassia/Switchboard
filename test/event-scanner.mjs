@@ -1,4 +1,4 @@
-// Switchboard · test/event-scanner.mjs
+// Delegit · test/event-scanner.mjs
 //
 // Direct tests for the inlined scanners. Node built-ins only; run with
 // `node test/event-scanner.mjs`.
@@ -27,7 +27,7 @@ function extract(source, symbol, kind, relay) {
 }
 
 function loadScanner(relay, symbol, onVisit) {
-  const source = readFileSync(join(here, "..", "skills", `switchboard-${relay}`, "scripts", "relay.mjs"), "utf8");
+  const source = readFileSync(join(here, "..", "skills", `delegit-${relay}`, "scripts", "relay.mjs"), "utf8");
   const maxBufferedChars = extract(source, "MAX_BUFFERED_CHARS", "const", relay);
   let scanner = extract(source, symbol, "function", relay);
   if (onVisit) {

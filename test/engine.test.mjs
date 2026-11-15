@@ -1,4 +1,4 @@
-// Switchboard · test/engine.test.mjs
+// Delegit · test/engine.test.mjs
 //
 // End-to-end tests of the relay engine (src/core/relay.mjs) through a synthetic
 // adapter bundled with the real tools/build.mjs. They pin guarantees every
@@ -90,7 +90,7 @@ before(() => {
   mkdirSync(join(temp, "tools"));
   mkdirSync(join(temp, "src", "core"), { recursive: true });
   mkdirSync(join(temp, "src", "adapters"));
-  mkdirSync(join(temp, "skills", "switchboard-fake", "scripts"), { recursive: true });
+  mkdirSync(join(temp, "skills", "delegit-fake", "scripts"), { recursive: true });
   copyFileSync(join(root, "tools", "build.mjs"), join(temp, "tools", "build.mjs"));
   for (const file of readdirSync(join(root, "src", "core"))) {
     copyFileSync(join(root, "src", "core", file), join(temp, "src", "core", file));
@@ -101,7 +101,7 @@ before(() => {
   writeFileSync(brief, "do the thing\n");
   const built = spawnSync(process.execPath, [join(temp, "tools", "build.mjs"), "fake"], { encoding: "utf8" });
   assert.equal(built.status, 0, built.stderr);
-  relay = join(temp, "skills", "switchboard-fake", "scripts", "relay.mjs");
+  relay = join(temp, "skills", "delegit-fake", "scripts", "relay.mjs");
 });
 
 after(() => rmSync(temp, { recursive: true, force: true }));

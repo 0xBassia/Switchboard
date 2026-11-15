@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Switchboard · relay smoke.
+ * Delegit · relay smoke.
  *
  * Drives the relays, unmodified and end to end, against a fake implementer CLI
  * planted on PATH, and asserts the two guarantees they make about runs that do

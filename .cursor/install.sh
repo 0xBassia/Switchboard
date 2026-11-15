@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Cloud Agent install for Switchboard.
+# Cloud Agent install for Delegit.
 #
 # This package is Node built-ins only — no package.json, no dependencies, so
 # there is nothing to `npm install`. The one thing that matters is the Node

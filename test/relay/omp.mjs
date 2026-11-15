@@ -196,12 +196,12 @@ export async function runOmp(h) {
     bothResume.status === 2 && /mutually exclusive/.test(bothResume.stderr));
 
   {
-    const setupDir = join(h.testDir, "..", "skills", "switchboard-setup", "scripts");
+    const setupDir = join(h.testDir, "..", "skills", "delegit-setup", "scripts");
     const cfgHome = join(h.scratch, "home-lane-omp");
     mkdirSync(cfgHome, { recursive: true });
     const laneFile = join(workDir, "omp-lane.json");
     writeFileSync(laneFile, `${JSON.stringify({
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: {
         feature: {
           implementer: "omp",

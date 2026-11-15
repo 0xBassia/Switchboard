@@ -1,4 +1,4 @@
 {
-  "name": "switchboard",
+  "name": "delegit",
   "install": "bash .cursor/install.sh"
 }

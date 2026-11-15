@@ -80,7 +80,7 @@ export async function runClaude(h) {
         `${shell}(git * push *)`,
         `${shell}(git * push)`,
         `${shell}(claude *)`,
-        `${shell}(*switchboard-claude*)`,
+        `${shell}(*delegit-claude*)`,
       ];
       h.check("claude success: Claude.ai connectors disabled",
         profile.disableClaudeAiConnectors === true);

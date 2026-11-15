@@ -5,7 +5,7 @@ import { join } from "node:path";
 // Native Windows is not supported: every entry point refuses it with exit 2 and the WSL
 // pointer before it reads config or writes anything, while --help still answers. The
 // platform is faked with a preload, so this runs on any POSIX host.
-const WSL_MESSAGE = "switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)";
+const WSL_MESSAGE = "delegit: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)";
 
 export function runNativeWindows(h) {
   const preload = join(h.scratch, "fake-win32.mjs");
@@ -27,10 +27,10 @@ export function runNativeWindows(h) {
     h.check("native Windows: pi --help still answers", help.status === 0 && help.stdout.includes("relay.mjs"));
   }
   {
-    const queue = join(skillsDir, "switchboard-queue", "scripts", "queue.mjs");
+    const queue = join(skillsDir, "delegit-queue", "scripts", "queue.mjs");
     const queueFile = join(h.scratch, "native-windows-queue.json");
     const outDir = join(h.scratch, "out-native-windows-queue");
-    writeFileSync(queueFile, JSON.stringify({ version: "switchboard-queue.v1", tasks: [{ id: "a", brief: h.briefPath, implementer: "pi" }] }));
+    writeFileSync(queueFile, JSON.stringify({ version: "delegit-queue.v1", tasks: [{ id: "a", brief: h.briefPath, implementer: "pi" }] }));
     const run = asWin32(queue, ["run", queueFile, "--cd", h.freshRepo("work-native-windows-queue"), "--out-dir", outDir]);
     h.check(`native Windows: the queue refuses with exit 2 and the WSL pointer (got ${run.status})`, refused(run));
     h.check("native Windows: the queue writes no artifacts", !existsSync(outDir));
@@ -42,7 +42,7 @@ export function runNativeWindows(h) {
     ["discover.mjs", []],
     ["lane.mjs", ["resolve", "--lane", "feature", "--implementer", "pi"]],
   ]) {
-    const path = join(skillsDir, "switchboard-setup", "scripts", script);
+    const path = join(skillsDir, "delegit-setup", "scripts", script);
     const run = asWin32(path, args);
     h.check(`native Windows: setup ${script} refuses with exit 2 and the WSL pointer (got ${run.status})`, refused(run));
     const help = asWin32(path, ["--help"]);

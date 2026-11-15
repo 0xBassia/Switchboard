@@ -14,7 +14,7 @@ export const EXTRA_ARGS = {
 
 export const binaryName = (skill) => (skill === "cursor" ? "cursor-agent" : skill === "warp" ? "oz" : skill);
 
-export const skillDir = (skill) => `switchboard-${skill}`;
+export const skillDir = (skill) => `delegit-${skill}`;
 
 export const relayPath = (testDir, skill) =>
-  join(testDir, "..", "skills", `switchboard-${skill}`, "scripts", "relay.mjs");
+  join(testDir, "..", "skills", `delegit-${skill}`, "scripts", "relay.mjs");

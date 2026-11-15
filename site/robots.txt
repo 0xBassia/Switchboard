@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://0xbassia.github.io/Switchboard/sitemap.xml
+Sitemap: https://0xbassia.github.io/Delegit/sitemap.xml

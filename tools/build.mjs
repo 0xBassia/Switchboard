@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds every skills/switchboard-<name>/scripts/relay.mjs from
+// Builds every skills/delegit-<name>/scripts/relay.mjs from
 // src/adapters/<name>.mjs plus the src/core modules it imports.
 //
 // Skills install one directory at a time, so a shipped relay cannot import
@@ -267,7 +267,7 @@ function bundle(name) {
 }
 
 function relayPath(name) {
-  return join(root, "skills", `switchboard-${name}`, "scripts", "relay.mjs");
+  return join(root, "skills", `delegit-${name}`, "scripts", "relay.mjs");
 }
 
 function main() {

@@ -2,30 +2,30 @@
   "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
   "groupings": [
     {
-      "title": "Switchboard: delegate to CLI agents",
+      "title": "Delegit: delegate to CLI agents",
       "description": "Delegate coding tasks from your agent to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi or Warp, then review the diff and commit it yourself.",
       "skills": [
-        "switchboard-claude",
-        "switchboard-codex",
-        "switchboard-cursor",
-        "switchboard-opencode",
-        "switchboard-pi",
-        "switchboard-omp",
-        "switchboard-warp"
+        "delegit-claude",
+        "delegit-codex",
+        "delegit-cursor",
+        "delegit-opencode",
+        "delegit-pi",
+        "delegit-omp",
+        "delegit-warp"
       ]
     },
     {
-      "title": "Switchboard: setup",
+      "title": "Delegit: setup",
       "description": "Discover installed coding-agent CLIs and route each kind of work (features, tests, UI, reviews) to the right one.",
       "skills": [
-        "switchboard-setup"
+        "delegit-setup"
       ]
     },
     {
-      "title": "Switchboard: queue",
+      "title": "Delegit: queue",
       "description": "Run several coding tasks in parallel across coding agents, each in its own git worktree, with fallback and cross-review.",
       "skills": [
-        "switchboard-queue"
+        "delegit-queue"
       ]
     }
   ]

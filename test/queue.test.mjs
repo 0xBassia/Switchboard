@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createHarness } from './harness/create-harness.mjs';
 import { installShim } from './harness/install-shim.mjs';
 
-const queueScript = fileURLToPath(new URL('../skills/switchboard-queue/scripts/queue.mjs', import.meta.url));
+const queueScript = fileURLToPath(new URL('../skills/delegit-queue/scripts/queue.mjs', import.meta.url));
 const GIT_ENV = {
   GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com',
   GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
@@ -69,7 +69,7 @@ function setup() {
 }
 
 const task = (id, extra = {}) => ({ id, brief: 'brief.md', implementer: 'codex', ...extra });
-const doc = (tasks, extra = {}) => ({ version: 'switchboard-queue.v1', tasks, ...extra });
+const doc = (tasks, extra = {}) => ({ version: 'delegit-queue.v1', tasks, ...extra });
 const removeShim = (h, key) => rmSync(join(h.scratch, 'shim', key), { force: true });
 
 test('usage errors exit 2, explain themselves, and write nothing', { timeout: 120000 }, async () => {
@@ -78,7 +78,7 @@ test('usage errors exit 2, explain themselves, and write nothing', { timeout: 12
     const repo = c.repo();
     const plain = join(c.h.scratch, 'plain'); mkdirSync(plain);
     const cases = [
-      ['bad version', doc([task('a')], { version: 'switchboard-queue.v0' }), /version/],
+      ['bad version', doc([task('a')], { version: 'delegit-queue.v0' }), /version/],
       ['empty tasks', doc([]), /tasks/],
       ['duplicate id', doc([task('a'), task('a')]), /duplicate id "a"/],
       ['bad id', doc([task('bad id!')]), /"id" must match/],
@@ -148,7 +148,7 @@ test('three codex tasks run in parallel, each in its own worktree', { timeout: 1
     });
     assert.equal(r.code, 0, r.stdout + r.stderr);
     const res = c.result(out);
-    assert.equal(res.schema, 'switchboard-queue.result.v1');
+    assert.equal(res.schema, 'delegit-queue.result.v1');
     assert.equal(res.status, 'completed');
     assert.equal(res.baseDirty, false);
     assert.equal(res.totals.tasks, 3);
@@ -161,7 +161,7 @@ test('three codex tasks run in parallel, each in its own worktree', { timeout: 1
       assert.equal(t.attempts.length, 1);
       assert.equal(t.attempts[0].status, 'completed');
       assert.ok(existsSync(join(t.worktree.path, 'written.txt')), `${t.id}: file in its own worktree`);
-      assert.match(t.worktree.branch, /^switchboard\//);
+      assert.match(t.worktree.branch, /^delegit\//);
       assert.ok(git(repo, 'branch', '--list', t.worktree.branch));
       // The file lives only in this task's worktree.
       for (const other of res.tasks) if (other !== t) assert.notEqual(other.worktree.path, t.worktree.path);
@@ -278,9 +278,9 @@ test('lanes resolve through the global config; an unknown lane is a usage error'
   try {
     const repo = c.repo();
     const xdg = join(c.h.scratch, 'xdg');
-    mkdirSync(join(xdg, 'switchboard'), { recursive: true });
-    writeFileSync(join(xdg, 'switchboard', 'config.json'), JSON.stringify({
-      version: 'switchboard-fleet.v1', lanes: { builder: { implementer: 'codex' } },
+    mkdirSync(join(xdg, 'delegit'), { recursive: true });
+    writeFileSync(join(xdg, 'delegit', 'config.json'), JSON.stringify({
+      version: 'delegit-fleet.v1', lanes: { builder: { implementer: 'codex' } },
     }));
     const laneEnv = { XDG_CONFIG_HOME: xdg, HOME: c.home };
 

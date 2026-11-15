@@ -5,7 +5,7 @@ This project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 Two people have independently built the same implementer skill twice now. Both times someone's work was
 wasted. So: **claim an implementer before you build it**, and check the open pull requests first.
 
-[Open claims](https://github.com/0xBassia/Switchboard/issues?q=is%3Aissue+label%3Aimplementer) · [Open pull requests](https://github.com/0xBassia/Switchboard/pulls)
+[Open claims](https://github.com/0xBassia/Delegit/issues?q=is%3Aissue+label%3Aimplementer) · [Open pull requests](https://github.com/0xBassia/Delegit/pulls)
 
 ## What counts as an implementer skill
 
@@ -22,12 +22,12 @@ Four invariants hold for every skill here, and they are the bar for a new one:
 
 ## Merge checklist for a new skill
 
-- [ ] `skills/switchboard-<name>/SKILL.md` — a `description` that triggers on delegation to that CLI and
+- [ ] `skills/delegit-<name>/SKILL.md` — a `description` that triggers on delegation to that CLI and
       nothing else, plus `compatibility:` naming the binary and its auth step.
 - [ ] Four `references/*.md`: `writing-the-brief`, `dispatch-and-poll`, `review-and-land`,
       `multi-task-queues`. Not three, not five — the shape is the contract.
 - [ ] One `scripts/relay.mjs`, generated from `src/adapters/<name>.mjs` by `node tools/build.mjs`; Node built-ins only, and it never commits.
-- [ ] `result.json` speaks `switchboard-relay.result.v1`: `status`, `exitCode`, `signal`, the final
+- [ ] `result.json` speaks `delegit-relay.result.v1`: `status`, `exitCode`, `signal`, the final
       report, `touchedFiles` (`null` when git cannot report, with a `gitError` string saying why; `[]` when the tree is clean), and a
       session id where the CLI exposes one.
 - [ ] Usage errors exit 2 before writing a result file; a missing binary exits 127 **with** one.
@@ -41,8 +41,8 @@ Four invariants hold for every skill here, and they are the bar for a new one:
 
 ## Utility skills (exception)
 
-`switchboard-setup` is a **utility** skill: it configures fleet **lanes** (discover → propose → approve →
-write). `switchboard-queue` runs a batch of briefs in parallel through the
+`delegit-setup` is a **utility** skill: it configures fleet **lanes** (discover → propose → approve →
+write). `delegit-queue` runs a batch of briefs in parallel through the
 installed sibling relays, each in a git worktree, with fallback to another lane or implementer when a
 CLI is missing; it never commits. Neither is an implementer skill.
 
@@ -54,10 +54,10 @@ Utility checklist (instead of the four-references + `relay.mjs` bar above):
 - [ ] Registered in `skills.sh.json` (Setup grouping is fine, or its own grouping such as Queue).
 - [ ] Listed in the smoke suite's **utility** carve-out (not the implementer timeout/abort matrix).
 - [ ] A short README mention and utility scope in `AGENTS.md`.
-- [ ] `switchboard-queue` changes: run `node --test test/queue.test.mjs` (fake implementer CLIs, temporary
+- [ ] `delegit-queue` changes: run `node --test test/queue.test.mjs` (fake implementer CLIs, temporary
       git repositories and HOME only).
 
-Do not invent a second utility that duplicates lane setup. Extend `switchboard-setup` instead.
+Do not invent a second utility that duplicates lane setup. Extend `delegit-setup` instead.
 
 ## Releases
 
@@ -66,10 +66,10 @@ Install pinning uses **git tags**, not `metadata.version` alone:
 1. Land the release on `main`.
 2. Set every skill's `metadata.version` to the release semver (e.g. `1.0.0`).
 3. Create an annotated tag: `git tag -a v1.0.0 -m "v1.0.0"` and `git push origin v1.0.0`.
-4. Users install with `npx skills add 0xBassia/switchboard@v1.0.0`.
+4. Users install with `npx skills add 0xBassia/delegit@v1.0.0`.
 
 Bump the tag for user-visible skill or relay contract changes. Docs-only or smoke-only may be a
-patch. Schema ids (`switchboard-fleet.v1`, …) bump independently when the JSON shape breaks.
+patch. Schema ids (`delegit-fleet.v1`, …) bump independently when the JSON shape breaks.
 
 ## Everything else
 
@@ -88,11 +88,11 @@ a read-only and a write check in a throwaway repository, and the README-ready li
 
 Before changing completion detection or `touchedFiles`, read the relevant skill's result contract.
 Exercise clean, pre-dirty, same-dirty-path, dirty-submodule, and git-unavailable worktrees, and assert
-the exact `switchboard-relay.result.v1` fields instead of generic success or failure.
+the exact `delegit-relay.result.v1` fields instead of generic success or failure.
 
 ## Relay sources
 
-Never edit a `skills/switchboard-*/scripts/relay.mjs` by hand: each one is generated. Behavior shared by
+Never edit a `skills/delegit-*/scripts/relay.mjs` by hand: each one is generated. Behavior shared by
 every relay (flag intake, lanes, artifacts, preflight, the watchdog, signal handling, `result.json`) lives
 once in `src/core/`. What is specific to one CLI (its flags, version probe, launch, event parsing) lives
 in `src/adapters/<name>.mjs`. Edit the source, then run `node tools/build.mjs` and commit the regenerated

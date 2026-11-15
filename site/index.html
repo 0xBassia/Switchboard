@@ -3,31 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Switchboard: delegate coding tasks from Claude Code to Codex, Cursor and other CLI agents</title>
+<title>Delegit: delegate coding tasks from Claude Code to Codex, Cursor and other CLI agents</title>
 <meta name="description" content="Agent skills that let Claude Code, Codex or Cursor hand coding tasks to 7 CLI coding agents, run them in parallel git worktrees, and review every diff before it lands. Open source, MIT.">
-<link rel="canonical" href="https://0xbassia.github.io/Switchboard/">
+<link rel="canonical" href="https://0xbassia.github.io/Delegit/">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://0xbassia.github.io/Switchboard/">
-<meta property="og:site_name" content="Switchboard">
-<meta property="og:title" content="Switchboard: delegate coding tasks to CLI coding agents">
+<meta property="og:url" content="https://0xbassia.github.io/Delegit/">
+<meta property="og:site_name" content="Delegit">
+<meta property="og:title" content="Delegit: delegate coding tasks to CLI coding agents">
 <meta property="og:description" content="Let your coding agent hand tasks to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi or Warp, then review every diff and land it yourself.">
-<meta property="og:image" content="https://0xbassia.github.io/Switchboard/assets/social-card.png">
-<meta property="og:image:alt" content="Switchboard: route coding tasks to 7 CLI coding agents and review every diff">
+<meta property="og:image" content="https://0xbassia.github.io/Delegit/assets/social-card.png">
+<meta property="og:image:alt" content="Delegit: route coding tasks to 7 CLI coding agents and review every diff">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Switchboard: delegate coding tasks to CLI coding agents">
+<meta name="twitter:title" content="Delegit: delegate coding tasks to CLI coding agents">
 <meta name="twitter:description" content="Let your coding agent hand tasks to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi or Warp, then review every diff and land it yourself.">
-<meta name="twitter:image" content="https://0xbassia.github.io/Switchboard/assets/social-card.png">
+<meta name="twitter:image" content="https://0xbassia.github.io/Delegit/assets/social-card.png">
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Switchboard",
+  "name": "Delegit",
   "description": "Agent skills that let a coding agent delegate tasks to Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi and Warp, run them in parallel git worktrees, and review every diff before it lands.",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Linux, WSL",
-  "url": "https://0xbassia.github.io/Switchboard/",
-  "codeRepository": "https://github.com/0xBassia/Switchboard",
+  "url": "https://0xbassia.github.io/Delegit/",
+  "codeRepository": "https://github.com/0xBassia/Delegit",
   "license": "https://opensource.org/licenses/MIT",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -38,9 +38,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: an operator's switchboard. The hero and closing band are the jack panel; content sits on a 1120px inner column. */
+/* Layout: the hero and closing band are a patch panel (work routed to agents); content sits on a 1120px inner column. */
 :root {
-  --panel: #1a1d23;       /* switchboard panel */
+  --panel: #1a1d23;       /* delegit panel */
   --panel-deep: #121419;
   --label: #efe9dc;       /* enamel label */
   --lamp: #ffb020;        /* signal lamp */
@@ -249,23 +249,23 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           <path d="M17 32 C17 56 47 58 47 48" fill="none" stroke="#ffb020" stroke-width="4" stroke-linecap="round"/>
           <circle cx="47" cy="48" r="5" fill="#ffb020"/>
         </svg>
-        SWITCHBOARD
+        DELEGIT
       </a>
       <div class="nav-links">
         <a href="#how">How it works</a>
         <a href="#agents">Agents</a>
         <a href="#guarantees">Guarantees</a>
-        <a href="https://github.com/0xBassia/Switchboard">GitHub</a>
+        <a href="https://github.com/0xBassia/Delegit">GitHub</a>
       </div>
     </nav>
     <h1>Hand off the code. <em>Keep the judgment.</em></h1>
-    <p class="lede">Switchboard lets the coding agent you already work with hand a task to any of 7 CLI coding agents: Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi and Warp. It gets back a structured report and the diff. Your agent reviews the work, re-runs your tests, and lands it. Nothing commits without that review.</p>
+    <p class="lede">Delegit lets the coding agent you already work with hand a task to any of 7 CLI coding agents: Claude Code, Codex, Cursor, OpenCode, Pi, Oh My Pi and Warp. It gets back a structured report and the diff. Your agent reviews the work, re-runs your tests, and lands it. Nothing commits without that review.</p>
     <div class="hero-actions">
       <div class="install">
-        <code id="install-cmd">npx skills add 0xBassia/switchboard</code>
+        <code id="install-cmd">npx skills add 0xBassia/delegit</code>
         <button type="button" id="copy-btn">Copy</button>
       </div>
-      <a class="gh" href="https://github.com/0xBassia/Switchboard">Read the source on GitHub</a>
+      <a class="gh" href="https://github.com/0xBassia/Delegit">Read the source on GitHub</a>
     </div>
   </div>
 </header>
@@ -276,7 +276,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
       <div class="section-head">
         <span class="eyebrow">How it connects</span>
         <h2>Four steps, one connection</h2>
-        <p>Your agent stays the orchestrator. The implementer does the typing. Switchboard connects the two and records every outcome.</p>
+        <p>Your agent stays the orchestrator. The implementer does the typing. Delegit connects the two and records every outcome.</p>
       </div>
       <div class="steps">
         <div class="step">
@@ -287,7 +287,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
         </div>
         <div class="step">
           <div class="num">2</div>
-          <span class="who">Switchboard</span>
+          <span class="who">Delegit</span>
           <h3>Dispatch</h3>
           <p>One command launches the implementer, watches it, and writes <code>result.json</code> on every outcome.</p>
         </div>
@@ -301,7 +301,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           <div class="num">4</div>
           <span class="who">Your agent</span>
           <h3>Land</h3>
-          <p>Commits the verified work itself. Switchboard never commits, so every change that lands has been through your review.</p>
+          <p>Commits the verified work itself. Delegit never commits, so every change that lands has been through your review.</p>
         </div>
       </div>
     </div>
@@ -310,21 +310,21 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
   <section id="agents">
     <div class="wrap">
       <div class="section-head">
-        <span class="eyebrow">The board</span>
-        <h2>Seven agents on the line</h2>
-        <p>Each implementer is its own skill, so you install only the ones you use, for example <code>npx skills add 0xBassia/switchboard --skill switchboard-codex</code>. Each one speaks its CLI's real flags and reports in one shared result format.</p>
+        <span class="eyebrow">The agents</span>
+        <h2>Seven agents, one workflow</h2>
+        <p>Each implementer is its own skill, so you install only the ones you use, for example <code>npx skills add 0xBassia/delegit --skill delegit-codex</code>. Each one speaks its CLI's real flags and reports in one shared result format.</p>
       </div>
       <div class="startlist-wrap">
         <table class="startlist">
           <thead><tr><th scope="col">Line</th><th scope="col">Agent</th><th scope="col">Binary</th><th scope="col">Skill</th></tr></thead>
           <tbody>
-              <tr><td class="line">1</td><td class="cli">Claude Code</td><td><code>claude</code></td><td class="skill">switchboard-claude</td></tr>
-              <tr><td class="line">2</td><td class="cli">OpenAI Codex</td><td><code>codex</code></td><td class="skill">switchboard-codex</td></tr>
-              <tr><td class="line">3</td><td class="cli">Cursor Agent</td><td><code>cursor-agent</code></td><td class="skill">switchboard-cursor</td></tr>
-              <tr><td class="line">4</td><td class="cli">OpenCode</td><td><code>opencode</code></td><td class="skill">switchboard-opencode</td></tr>
-              <tr><td class="line">5</td><td class="cli">Pi</td><td><code>pi</code></td><td class="skill">switchboard-pi</td></tr>
-              <tr><td class="line">6</td><td class="cli">Oh My Pi</td><td><code>omp</code></td><td class="skill">switchboard-omp</td></tr>
-              <tr><td class="line">7</td><td class="cli">Warp Agent</td><td><code>oz</code></td><td class="skill">switchboard-warp</td></tr>
+              <tr><td class="line">1</td><td class="cli">Claude Code</td><td><code>claude</code></td><td class="skill">delegit-claude</td></tr>
+              <tr><td class="line">2</td><td class="cli">OpenAI Codex</td><td><code>codex</code></td><td class="skill">delegit-codex</td></tr>
+              <tr><td class="line">3</td><td class="cli">Cursor Agent</td><td><code>cursor-agent</code></td><td class="skill">delegit-cursor</td></tr>
+              <tr><td class="line">4</td><td class="cli">OpenCode</td><td><code>opencode</code></td><td class="skill">delegit-opencode</td></tr>
+              <tr><td class="line">5</td><td class="cli">Pi</td><td><code>pi</code></td><td class="skill">delegit-pi</td></tr>
+              <tr><td class="line">6</td><td class="cli">Oh My Pi</td><td><code>omp</code></td><td class="skill">delegit-omp</td></tr>
+              <tr><td class="line">7</td><td class="cli">Warp Agent</td><td><code>oz</code></td><td class="skill">delegit-warp</td></tr>
           </tbody>
         </table>
       </div>
@@ -370,9 +370,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           </div>
         </div>
         <div class="code" role="region" aria-label="Example result.json">
-          <div class="bar"><span>result.json</span><span>switchboard-relay.result.v1</span></div>
+          <div class="bar"><span>result.json</span><span>delegit-relay.result.v1</span></div>
 <pre><code>{
-  <span class="k">"schema"</span>: <span class="s">"switchboard-relay.result.v1"</span>,
+  <span class="k">"schema"</span>: <span class="s">"delegit-relay.result.v1"</span>,
   <span class="k">"lane"</span>: <span class="s">"review"</span>,
   <span class="k">"tool"</span>: <span class="s">"claude"</span>,
   <span class="k">"status"</span>: <span class="s">"completed"</span>,
@@ -405,9 +405,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
         </ul>
       </div>
       <div class="code" role="region" aria-label="Example lane config">
-        <div class="bar"><span>~/.config/switchboard/config.json</span><span>switchboard-fleet.v1</span></div>
+        <div class="bar"><span>~/.config/delegit/config.json</span><span>delegit-fleet.v1</span></div>
 <pre><code>{
-  <span class="k">"version"</span>: <span class="s">"switchboard-fleet.v1"</span>,
+  <span class="k">"version"</span>: <span class="s">"delegit-fleet.v1"</span>,
   <span class="k">"lanes"</span>: {
     <span class="k">"review"</span>:   { <span class="k">"implementer"</span>: <span class="s">"claude"</span>, <span class="k">"readOnly"</span>: true },
     <span class="k">"refactor"</span>: { <span class="k">"implementer"</span>: <span class="s">"codex"</span>,  <span class="k">"effort"</span>: <span class="s">"high"</span> },
@@ -421,9 +421,9 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
 
 <div class="finish">
   <div class="wrap">
-    <h2>Patch it through. <em>Own the result.</em></h2>
+    <h2>Delegate the work. <em>Own the result.</em></h2>
     <div class="install">
-      <code>npx skills add 0xBassia/switchboard</code>
+      <code>npx skills add 0xBassia/delegit</code>
       <button type="button" id="copy-btn-2">Copy</button>
     </div>
   </div>
@@ -431,8 +431,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
 
 <footer>
   <div class="wrap">
-    <span>Switchboard is MIT licensed. Node built-ins only. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).</span>
-    <a href="https://github.com/0xBassia/Switchboard">github.com/0xBassia/switchboard</a>
+    <span>Delegit is MIT licensed. Node built-ins only. Runs on macOS, Linux and WSL; native Windows is not supported (use WSL).</span>
+    <a href="https://github.com/0xBassia/Delegit">github.com/0xBassia/delegit</a>
   </div>
 </footer>
 
@@ -461,8 +461,8 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
       }
     });
   }
-  wireCopy("copy-btn", "npx skills add 0xBassia/switchboard");
-  wireCopy("copy-btn-2", "npx skills add 0xBassia/switchboard");
+  wireCopy("copy-btn", "npx skills add 0xBassia/delegit");
+  wireCopy("copy-btn-2", "npx skills add 0xBassia/delegit");
 </script>
 </body>
 </html>

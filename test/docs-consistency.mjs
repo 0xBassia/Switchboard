@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Docs consistency lint for the implementer skills (`switchboard-<key>`).
+// Docs consistency lint for the implementer skills (`delegit-<key>`).
 //
 // The per-CLI docs are deliberately NOT templated (each CLI has real nuance), so they can drift.
 // This lint pins the parts that must stay identical. It reads only Markdown, uses Node built-ins,
@@ -67,15 +67,15 @@ function parse(text) {
 
 for (const key of KEYS) {
   for (const file of FILES) {
-    const path = join(SKILLS_DIR, `switchboard-${key}`, file);
+    const path = join(SKILLS_DIR, `delegit-${key}`, file);
     const present = existsSync(path);
-    check(present, `switchboard-${key}/${file}: file is missing`);
+    check(present, `delegit-${key}/${file}: file is missing`);
     if (present) docs.set(`${key}/${file}`, parse(readFileSync(path, "utf8")));
   }
-  const skillPath = join(SKILLS_DIR, `switchboard-${key}`, "SKILL.md");
+  const skillPath = join(SKILLS_DIR, `delegit-${key}`, "SKILL.md");
   if (existsSync(skillPath)) {
     const title = readFileSync(skillPath, "utf8").match(/^# (.+?)\s+Delegate\s*$/m);
-    check(Boolean(title), `switchboard-${key}/SKILL.md: expected a "# <Name> Delegate" title`);
+    check(Boolean(title), `delegit-${key}/SKILL.md: expected a "# <Name> Delegate" title`);
     names[key] = title ? title[1] : key;
   }
 }
@@ -172,9 +172,9 @@ for (const [file, wanted] of Object.entries(REQUIRED_HEADINGS)) {
       if (!doc) continue;
       const has = doc.headings.includes(heading);
       if (key in excused) {
-        check(!has, `switchboard-${key}/${file}: stale exception, it now has "${heading}" (${excused[key]})`);
+        check(!has, `delegit-${key}/${file}: stale exception, it now has "${heading}" (${excused[key]})`);
       } else {
-        check(has, `switchboard-${key}/${file}: missing heading "${heading}"`);
+        check(has, `delegit-${key}/${file}: missing heading "${heading}"`);
       }
     }
   }
@@ -189,7 +189,7 @@ for (const [file, wanted] of Object.entries(REQUIRED_HEADINGS)) {
 // 2. Canonical sentences
 // ---------------------------------------------------------------------------------------------
 // `text` is matched against the whitespace-collapsed file, so line wrapping does not matter.
-// {CLI} is the display name from the skill title; {KEY} is the skill key (`codex` for switchboard-codex).
+// {CLI} is the display name from the skill title; {KEY} is the skill key (`codex` for delegit-codex).
 const NO_COHERENCE = "reviews the whole queue as one aggregate diff instead of the shared checklist";
 const CANONICAL = [
   {
@@ -254,7 +254,7 @@ const CANONICAL = [
   {
     why: "parallel batches pointer",
     file: "references/multi-task-queues.md",
-    text: "For independent tasks, the `switchboard-queue` skill dispatches several briefs in parallel, each in its own git worktree, and gives you one report to review. Dependent steps still run in order with this skill alone, as above.",
+    text: "For independent tasks, the `delegit-queue` skill dispatches several briefs in parallel, each in its own git worktree, and gives you one report to review. Dependent steps still run in order with this skill alone, as above.",
   },
   {
     why: "supported platforms (native Windows is refused at runtime)",
@@ -276,21 +276,21 @@ for (const sentence of CANONICAL) {
     if (!doc) continue;
     const has = doc.flat.includes(fill(sentence.text, key).replace(/\s+/g, " "));
     if (key in excused) {
-      check(!has, `switchboard-${key}/${sentence.file}: stale exception, it now has the "${sentence.why}" sentence (${excused[key]})`);
+      check(!has, `delegit-${key}/${sentence.file}: stale exception, it now has the "${sentence.why}" sentence (${excused[key]})`);
     } else {
-      check(has, `switchboard-${key}/${sentence.file}: missing canonical sentence (${sentence.why}): ${fill(sentence.text, key)}`);
+      check(has, `delegit-${key}/${sentence.file}: missing canonical sentence (${sentence.why}): ${fill(sentence.text, key)}`);
     }
   }
 }
 
-// warp has no read-only mode (switchboard-queue/scripts/queue.mjs), so they can be queue
+// warp has no read-only mode (delegit-queue/scripts/queue.mjs), so they can be queue
 // tasks but never reviewers. Every other implementer must not claim that.
 const NO_READ_ONLY = new Set(["warp"]);
 for (const key of KEYS) {
   const doc = docs.get(`${key}/references/multi-task-queues.md`);
   if (!doc) continue;
   const claims = doc.flat.includes(`${names[key]} can be a queue task but not a reviewer`);
-  check(claims === NO_READ_ONLY.has(key), `switchboard-${key}/references/multi-task-queues.md: ${NO_READ_ONLY.has(key) ? "must say it can be a queue task but not a reviewer" : "must not claim it cannot review"}`);
+  check(claims === NO_READ_ONLY.has(key), `delegit-${key}/references/multi-task-queues.md: ${NO_READ_ONLY.has(key) ? "must say it can be a queue task but not a reviewer" : "must not claim it cannot review"}`);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -308,7 +308,7 @@ for (const key of KEYS) {
     if (!doc) continue;
     doc.prose.forEach((line) => {
       for (const match of stripCode(line).matchAll(idPattern)) {
-        fail(`switchboard-${key}/${file}: lowercase CLI id "${match[1]}" where the display name belongs: ${line.trim()}`);
+        fail(`delegit-${key}/${file}: lowercase CLI id "${match[1]}" where the display name belongs: ${line.trim()}`);
       }
     });
   }
@@ -318,7 +318,7 @@ for (const key of KEYS) {
     if (!doc) continue;
     const phrase = new RegExp(`\\b(?:one|a|the) (${KEYS.join("|")}) (?:run|session|conversation)\\b`);
     const found = doc.flat.replace(/`[^`]*`/g, "").match(phrase);
-    check(!found, `switchboard-${key}/${file}: lowercase CLI id in "${found?.[0]}"`);
+    check(!found, `delegit-${key}/${file}: lowercase CLI id in "${found?.[0]}"`);
   }
 }
 
@@ -344,7 +344,7 @@ for (const key of KEYS) {
     const text = doc.prose.map(stripCode).join(" ").replace(/\s+/g, " ");
     for (const [pattern, label] of BANNED) {
       const match = text.match(pattern);
-      check(!match, `switchboard-${key}/${file}: banned vocabulary "${match?.[0]}": ${label}`);
+      check(!match, `delegit-${key}/${file}: banned vocabulary "${match?.[0]}": ${label}`);
     }
   }
 }
@@ -370,7 +370,7 @@ for (const key of KEYS) {
         const target = link[1] ? docs.get(`${key}/${resolveRef(file, link[1])}`) : doc;
         if (!target) continue;
         const anchors = new Set(target.headings.map(slug));
-        check(anchors.has(link[2]), `switchboard-${key}/${file}: link to #${link[2]} matches no heading in ${link[1] ?? file}`);
+        check(anchors.has(link[2]), `delegit-${key}/${file}: link to #${link[2]} matches no heading in ${link[1] ?? file}`);
       }
     }
   }

@@ -2,12 +2,12 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// ---- switchboard-setup: discover + fleet (fleet lanes) ----
+// ---- delegit-setup: discover + fleet (fleet lanes) ----
 export function runSetup(h) {
-  const setupDir = join(h.testDir, "..", "skills", "switchboard-setup", "scripts");
+  const setupDir = join(h.testDir, "..", "skills", "delegit-setup", "scripts");
   for (const script of ["discover.mjs", "config.mjs", "implementers.mjs", "lane.mjs"]) {
     const c = spawnSync(process.execPath, ["--check", join(setupDir, script)], { encoding: "utf8" });
-    h.check(`syntax: switchboard-setup/scripts/${script}`, c.status === 0);
+    h.check(`syntax: delegit-setup/scripts/${script}`, c.status === 0);
   }
 
   const help = spawnSync(process.execPath, [join(setupDir, "discover.mjs"), "--help"], { encoding: "utf8" });
@@ -24,7 +24,7 @@ export function runSetup(h) {
   } catch {
     report = null;
   }
-  h.check("discover reports version", report?.version === "switchboard-discover.v1");
+  h.check("discover reports version", report?.version === "delegit-discover.v1");
   h.check("discover lists discovered or missing", Array.isArray(report?.discovered) && Array.isArray(report?.missing));
   h.check(
     "discover covers every implementer in the smoke matrix",
@@ -84,7 +84,7 @@ export function runSetup(h) {
 
   try {
     const good = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: {
         feature: { implementer: "opencode", model: "opencode/gpt-5", variant: "high" },
         tests: { implementer: "codex", effort: "medium" },
@@ -103,7 +103,7 @@ export function runSetup(h) {
     h.check("config validate accepts a good map", validate.status === 0);
 
     const bareOpenCode = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "opencode" } },
     };
     const bareOpenCodeFile = join(cfgRepo, "bare-opencode.json");
@@ -115,7 +115,7 @@ export function runSetup(h) {
     h.check("config validate requires model on opencode", rejectBare.status === 2);
 
     const bareModel = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "opencode", model: "gpt-5" } },
     };
     const bareModelFile = join(cfgRepo, "bare-model.json");
@@ -127,7 +127,7 @@ export function runSetup(h) {
     h.check("config validate requires provider/model for opencode", rejectBareModel.status === 2);
 
     const codexProvider = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "codex", provider: "echo" } },
     };
     const codexProviderFile = join(cfgRepo, "codex-provider.json");
@@ -140,7 +140,7 @@ export function runSetup(h) {
       rejectCodexProvider.status === 2 && /does not support provider/.test(rejectCodexProvider.stderr));
 
     const ompEffort = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "omp", effort: "banana" } },
     };
     const ompEffortFile = join(cfgRepo, "omp-effort.json");
@@ -158,7 +158,7 @@ export function runSetup(h) {
       ["opencode//", "after"],
     ]) {
       const malformedModel = {
-        version: "switchboard-fleet.v1",
+        version: "delegit-fleet.v1",
         lanes: { feature: { implementer: "opencode", model } },
       };
       const malformedModelFile = join(cfgRepo, `malformed-opencode-model-${boundary}-${model.length}.json`);
@@ -175,7 +175,7 @@ export function runSetup(h) {
     }
 
     const hugeTimeout = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { slow: { implementer: "warp", timeout: "999999999h" } },
     };
     const hugeTimeoutFile = join(cfgRepo, "huge-timeout.json");
@@ -187,7 +187,7 @@ export function runSetup(h) {
     h.check("config validate rejects timeout above relay ceiling", rejectTimeout.status === 2);
 
     const conflictAutonomy = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "codex", readOnly: true, sandbox: "danger-full-access" } },
     };
     const conflictFile = join(cfgRepo, "conflict-autonomy.json");
@@ -199,7 +199,7 @@ export function runSetup(h) {
     h.check("config validate rejects contradictory readOnly+sandbox", rejectConflict.status === 2);
 
     const badClaudeModel = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "claude", model: "bad model" } },
     };
     const badClaudeModelFile = join(cfgRepo, "bad-claude-model.json");
@@ -215,7 +215,7 @@ export function runSetup(h) {
     );
 
     const badCodexModel = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "codex", model: "x & whoami" } },
     };
     const badCodexModelFile = join(cfgRepo, "bad-codex-model.json");
@@ -231,7 +231,7 @@ export function runSetup(h) {
     );
     for (const [field, value] of [["model", "a b;c"], ["effort", "very fast"]]) {
       const badCodexDial = {
-        version: "switchboard-fleet.v1",
+        version: "delegit-fleet.v1",
         lanes: { feature: { implementer: "codex", [field]: value } },
       };
       const badCodexDialFile = join(cfgRepo, `bad-codex-dial-${field}.json`);
@@ -252,7 +252,7 @@ export function runSetup(h) {
     h.check("codex relay rejects shell-unsafe --model", unsafeCodexFlag.status === 2);
 
     const badVariant = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "opencode", model: "opencode/gpt-5", variant: "high & whoami" } },
     };
     const badVariantFile = join(cfgRepo, "bad-variant.json");
@@ -281,7 +281,7 @@ export function runSetup(h) {
       ["OpenRouter ~latest", "openrouter/~anthropic/claude-sonnet-latest"],
     ]) {
       const catalogModel = {
-        version: "switchboard-fleet.v1",
+        version: "delegit-fleet.v1",
         lanes: { feature: { implementer: "opencode", model } },
       };
       const catalogModelFile = join(cfgRepo, `catalog-opencode-model-${shape.replace(/\W+/g, "-")}.json`);
@@ -296,7 +296,7 @@ export function runSetup(h) {
     // '@' and '~' must not open the door to shell metacharacters ('&', '%') riding alongside them.
     for (const [index, model] of ["x/@cf & whoami", "x/~%PATH%"].entries()) {
       const badOpenCodeModel = {
-        version: "switchboard-fleet.v1",
+        version: "delegit-fleet.v1",
         lanes: { feature: { implementer: "opencode", model } },
       };
       const badOpenCodeModelFile = join(cfgRepo, `bad-opencode-model-${index}.json`);
@@ -313,7 +313,7 @@ export function runSetup(h) {
     }
 
     const badEffort = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "opencode", model: "opencode/gpt-5", effort: "high" } },
     };
     const badFile = join(cfgRepo, "bad.json");
@@ -325,7 +325,7 @@ export function runSetup(h) {
     h.check("config validate rejects effort on opencode", rejectEffort.status === 2);
 
     const badClaude = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "claude", effort: "banana" } },
     };
     const badClaudeFile = join(cfgRepo, "bad-claude.json");
@@ -337,7 +337,7 @@ export function runSetup(h) {
     h.check("config validate rejects unknown claude effort", rejectClaude.status === 2);
 
     const badOmp = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "omp", effort: "inherit" } },
     };
     const badOmpFile = join(cfgRepo, "bad-omp.json");
@@ -350,7 +350,7 @@ export function runSetup(h) {
       rejectOmp.status === 2 && /off, auto, minimal, low, medium, high, xhigh, max/.test(rejectOmp.stderr));
 
     const badCursorSandbox = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "cursor", sandbox: "workspace-write" } },
     };
     const badCursorFile = join(cfgRepo, "bad-cursor.json");
@@ -367,7 +367,7 @@ export function runSetup(h) {
       { encoding: "utf8", env: process.env },
     );
     h.check("config write --scope global", writeGlobal.status === 0);
-    const globalPath = join(cfgHome, ".config", "switchboard", "config.json");
+    const globalPath = join(cfgHome, ".config", "delegit", "config.json");
     h.check("global config file created", existsSync(globalPath));
 
     // Phase 2: --lane resolve / mismatch / flag override (global map only so far).
@@ -392,7 +392,7 @@ export function runSetup(h) {
     );
 
     const codexReadOnly = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { review: { implementer: "codex", readOnly: true } },
     };
     const codexReadOnlyFile = join(cfgRepo, "codex-readonly.json");
@@ -425,7 +425,7 @@ export function runSetup(h) {
     });
 
     const ompThinking = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { feature: { implementer: "omp", effort: "high", model: "google/fake-model" } },
     };
     const ompThinkingFile = join(cfgRepo, "omp-thinking.json");
@@ -464,7 +464,7 @@ export function runSetup(h) {
     );
     h.check(
       "lane resolve: wrong implementer fails loud",
-      laneMismatchResolve.status === 2 && /use switchboard-opencode/.test(laneMismatchResolve.stderr),
+      laneMismatchResolve.status === 2 && /use delegit-opencode/.test(laneMismatchResolve.stderr),
     );
 
     const laneBrief = join(cfgRepo, "lane-brief.txt");
@@ -478,7 +478,7 @@ export function runSetup(h) {
 
     // Explicit Claude full-access must win over a readOnly lane (flags win).
     const claudeRoLane = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: { review: { implementer: "claude", readOnly: true } },
     };
     const claudeRoFile = join(cfgRepo, "claude-readonly.json");
@@ -635,7 +635,7 @@ export function runSetup(h) {
     h.check(
       "relay --lane: wrong skill fails loud (no remap)",
       wrongSkill.status === 2 &&
-        /use switchboard-opencode/.test(wrongSkill.stderr) &&
+        /use delegit-opencode/.test(wrongSkill.stderr) &&
         !existsSync(join(cfgRepo, "result.json")),
     );
 
@@ -670,7 +670,7 @@ export function runSetup(h) {
         !overrideArgs.includes("--variant"));
 
     const projectOnly = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: {
         feature: { implementer: "claude", effort: "high" },
       },
@@ -679,14 +679,14 @@ export function runSetup(h) {
     writeFileSync(projectFile, `${JSON.stringify(projectOnly, null, 2)}\n`);
 
     const untrustedProject = {
-      version: "switchboard-fleet.v1",
+      version: "delegit-fleet.v1",
       lanes: {
         feature: { implementer: "codex", sandbox: "danger-full-access" },
       },
     };
-    mkdirSync(join(cfgRepo, ".switchboard"), { recursive: true });
+    mkdirSync(join(cfgRepo, ".delegit"), { recursive: true });
     writeFileSync(
-      join(cfgRepo, ".switchboard", "config.json"),
+      join(cfgRepo, ".delegit", "config.json"),
       `${JSON.stringify(untrustedProject, null, 2)}\n`,
     );
     const rejectUntrustedProject = spawnSync(
@@ -705,13 +705,13 @@ export function runSetup(h) {
       { encoding: "utf8", env: process.env },
     );
     h.check("config write --scope project", writeProject.status === 0);
-    h.check("project config file created", existsSync(join(cfgRepo, ".switchboard", "config.json")));
+    h.check("project config file created", existsSync(join(cfgRepo, ".delegit", "config.json")));
     h.check(
       "project config approval hash lives under git metadata",
-      existsSync(join(cfgRepo, ".git", "switchboard", "project-config.sha256")),
+      existsSync(join(cfgRepo, ".git", "delegit", "project-config.sha256")),
     );
 
-    // Symlinked .switchboard must not escape the repo.
+    // Symlinked .delegit must not escape the repo.
     const escapeRepo = join(fleetRoot, "escape-repo");
     const escapeOutside = join(fleetRoot, "escape-outside");
     mkdirSync(escapeRepo);
@@ -721,14 +721,14 @@ export function runSetup(h) {
     writeFileSync(join(escapeRepo, ".git", "HEAD"), "ref: refs/heads/master\n");
     writeFileSync(join(escapeRepo, ".git", "config"), "[core]\n\trepositoryformatversion = 0\n");
     try {
-      symlinkSync(escapeOutside, join(escapeRepo, ".switchboard"));
+      symlinkSync(escapeOutside, join(escapeRepo, ".delegit"));
       const escapeWrite = spawnSync(
         process.execPath,
         [join(setupDir, "config.mjs"), "write", "--scope", "project", "--cwd", escapeRepo, projectFile],
         { encoding: "utf8", env: process.env },
       );
       h.check(
-        "config write rejects symlinked .switchboard",
+        "config write rejects symlinked .delegit",
         escapeWrite.status === 2 &&
           /symlink/.test(escapeWrite.stderr) &&
           !existsSync(join(escapeOutside, "config.json")),
@@ -774,7 +774,7 @@ export function runSetup(h) {
       bareEff = null;
     }
     h.check("load outside git uses global only", loadBare.status === 0 && bareEff?.lanes?.feature?.source === "global");
-    h.check("load outside git does not invent .switchboard", !existsSync(join(bare, ".switchboard")));
+    h.check("load outside git does not invent .delegit", !existsSync(join(bare, ".delegit")));
 
     // After project whole-lane replace, feature → claude; opencode must fail.
     const afterOverlay = spawnSync(
@@ -784,13 +784,13 @@ export function runSetup(h) {
     );
     h.check(
       "relay --lane: project overlay remaps implementer (opencode fails)",
-      afterOverlay.status === 2 && /use switchboard-claude/.test(afterOverlay.stderr),
+      afterOverlay.status === 2 && /use delegit-claude/.test(afterOverlay.stderr),
     );
 
     // The approval lives under the repository's common git dir, so a linked worktree
-    // (switchboard-queue's default) resolves the approved project lane too.
+    // (delegit-queue's default) resolves the approved project lane too.
     const gitIn = (dir, args) => spawnSync("git", ["-C", dir, "-c", "user.name=Relay Smoke", "-c", "user.email=relay-smoke@example.invalid", ...args], { encoding: "utf8" });
-    gitIn(cfgRepo, ["add", ".switchboard"]);
+    gitIn(cfgRepo, ["add", ".delegit"]);
     gitIn(cfgRepo, ["commit", "-qm", "fleet config"]);
     const linked = join(fleetRoot, "repo-linked");
     const added = gitIn(cfgRepo, ["worktree", "add", "-q", linked]);
@@ -804,7 +804,7 @@ export function runSetup(h) {
       added.status === 0 && fromWorktree.status === 0 && /"effort":\s*"high"/.test(fromWorktree.stdout),
     );
     // Git with core.autocrlf can check the approved file out with CRLF: same content, still trusted.
-    const linkedConfig = join(linked, ".switchboard", "config.json");
+    const linkedConfig = join(linked, ".delegit", "config.json");
     writeFileSync(linkedConfig, readFileSync(linkedConfig, "utf8").replace(/\r?\n/g, "\r\n"));
     const fromCrlf = spawnSync(
       process.execPath,
@@ -815,8 +815,8 @@ export function runSetup(h) {
 
     // A project file this version cannot parse is ignored (never trusted), not fatal:
     // the user's own global lanes keep resolving in that repository.
-    const savedProject = readFileSync(join(cfgRepo, ".switchboard", "config.json"), "utf8");
-    writeFileSync(join(cfgRepo, ".switchboard", "config.json"), "{\"version\":\"switchboard-fleet.v2\",\"lanes\":{}}\n");
+    const savedProject = readFileSync(join(cfgRepo, ".delegit", "config.json"), "utf8");
+    writeFileSync(join(cfgRepo, ".delegit", "config.json"), "{\"version\":\"delegit-fleet.v2\",\"lanes\":{}}\n");
     const loadBad = spawnSync(
       process.execPath,
       [join(setupDir, "config.mjs"), "load", "--cwd", cfgRepo],
@@ -844,11 +844,11 @@ export function runSetup(h) {
       "lane resolve: a lane missing beside an unparseable project file names the reason",
       resolveMissingBad.status === 2 && /project fleet config ignored/.test(resolveMissingBad.stderr),
     );
-    writeFileSync(join(cfgRepo, ".switchboard", "config.json"), savedProject);
+    writeFileSync(join(cfgRepo, ".delegit", "config.json"), savedProject);
     // An untrusted repository's config that is a link (to /dev/zero, or to a file
     // outside the repository) is refused at once, never read.
-    rmSync(join(cfgRepo, ".switchboard", "config.json"));
-    symlinkSync("/dev/zero", join(cfgRepo, ".switchboard", "config.json"));
+    rmSync(join(cfgRepo, ".delegit", "config.json"));
+    symlinkSync("/dev/zero", join(cfgRepo, ".delegit", "config.json"));
     const started = Date.now();
     const loadLink = spawnSync(process.execPath, [join(setupDir, "config.mjs"), "load", "--cwd", cfgRepo],
       { encoding: "utf8", env: process.env, timeout: 20_000 });
@@ -857,11 +857,11 @@ export function runSetup(h) {
     h.check("config load: a project config that is a symlink is refused quickly, not read",
       loadLink.status === 0 && Date.now() - started < 10_000 && /not a regular file/.test(linkEff?.projectError ?? "") &&
         linkEff?.lanes?.tests?.source === "global");
-    rmSync(join(cfgRepo, ".switchboard", "config.json"));
-    writeFileSync(join(cfgRepo, ".switchboard", "config.json"), savedProject);
+    rmSync(join(cfgRepo, ".delegit", "config.json"));
+    writeFileSync(join(cfgRepo, ".delegit", "config.json"), savedProject);
 
     writeFileSync(
-      join(cfgRepo, ".switchboard", "config.json"),
+      join(cfgRepo, ".delegit", "config.json"),
       `${JSON.stringify(untrustedProject, null, 2)}\n`,
     );
     const rejectChangedProject = spawnSync(

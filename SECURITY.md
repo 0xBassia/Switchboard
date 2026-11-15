@@ -1,6 +1,6 @@
 # Security policy
 
-Report vulnerabilities privately through GitHub's private vulnerability reporting (Security tab → "Report a vulnerability") on 0xBassia/Switchboard. Do not open a public issue.
+Report vulnerabilities privately through GitHub's private vulnerability reporting (Security tab → "Report a vulnerability") on 0xBassia/Delegit. Do not open a public issue.
 
 Include:
 
@@ -13,9 +13,9 @@ You will get an acknowledgement within 7 days. Only the latest release is suppor
 
 ## Scope
 
-- relay scripts (`skills/switchboard-*/scripts/relay.mjs`)
-- `switchboard-queue`
-- `switchboard-setup` config handling
+- relay scripts (`skills/delegit-*/scripts/relay.mjs`)
+- `delegit-queue`
+- `delegit-setup` config handling
 
 ## Supported platforms
 

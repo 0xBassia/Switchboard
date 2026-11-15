@@ -6,9 +6,9 @@
 node_modules/
 
 # relay.mjs run artifacts, if a user points --out-dir back into the repo
-.switchboard/
+.delegit/
 
-# smoke fixtures for switchboard-setup (created under the repo tree)
+# smoke fixtures for delegit-setup (created under the repo tree)
 .tmp-fleet-smoke-*/
 
 # local agent config symlink (see AGENTS.md)

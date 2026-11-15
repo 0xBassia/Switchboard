@@ -16,11 +16,11 @@ const check = (name, condition) => {
 };
 
 for (const relay of RELAYS) {
-  const temp = mkdtempSync(join(tmpdir(), `switchboard-${relay}-`));
+  const temp = mkdtempSync(join(tmpdir(), `delegit-${relay}-`));
   try {
-    cpSync(join(here, "..", "skills", `switchboard-${relay}`), join(temp, `switchboard-${relay}`), { recursive: true });
+    cpSync(join(here, "..", "skills", `delegit-${relay}`), join(temp, `delegit-${relay}`), { recursive: true });
     const result = spawnSync(process.execPath, ["scripts/relay.mjs", "--help"], {
-      cwd: join(temp, `switchboard-${relay}`),
+      cwd: join(temp, `delegit-${relay}`),
       encoding: "utf8",
     });
     check(`${relay}: isolated --help`, result.status === 0 && Boolean(result.stdout.trim()));

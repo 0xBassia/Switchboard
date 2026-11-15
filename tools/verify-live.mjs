@@ -13,8 +13,8 @@
 // Per CLI (installed and not known to be logged out):
 //   read-only  a brief that only reads; passes when the run completes, no file
 //              changes, and the tripwire (where the relay has one) reports false
-//   write      a brief that creates switchboard-check.txt; passes when the run
-//              completes, the file holds "switchboard ok", and touchedFiles reports it
+//   write      a brief that creates delegit-check.txt; passes when the run
+//              completes, the file holds "delegit ok", and touchedFiles reports it
 // Results: <out>/verify-<date>-<platform>.json and a .md with README lines.
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -25,15 +25,15 @@ import { fileURLToPath } from "node:url";
 import { parseDuration } from "../src/core/duration.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const discoverScript = join(root, "skills", "switchboard-setup", "scripts", "discover.mjs");
+const discoverScript = join(root, "skills", "delegit-setup", "scripts", "discover.mjs");
 
 const READ_BRIEF = `List the files in this repository and summarize what README.md says in one sentence.
 
 This is a read-only task: do not create, modify, or delete any file, and do not run commands that write.
 Report the file list and the one-sentence summary.`;
-const WRITE_BRIEF = `Create a file named switchboard-check.txt in the repository root containing exactly one line:
+const WRITE_BRIEF = `Create a file named delegit-check.txt in the repository root containing exactly one line:
 
-switchboard ok
+delegit ok
 
 Do not modify, create, or delete any other file, and do not commit.
 Report what you created.`;
@@ -79,13 +79,13 @@ function parseArgs(argv) {
 }
 
 function freshRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "switchboard-verify-"));
+  const dir = mkdtempSync(join(tmpdir(), "delegit-verify-"));
   const git = (args) => execFileSync("git", args, { cwd: dir, stdio: "ignore" });
   git(["init", "-q"]);
-  writeFileSync(join(dir, "README.md"), "# Sample\n\nA tiny repository used to verify Switchboard relays.\n");
+  writeFileSync(join(dir, "README.md"), "# Sample\n\nA tiny repository used to verify Delegit relays.\n");
   writeFileSync(join(dir, "notes.txt"), "first line\n");
   git(["add", "."]);
-  git(["-c", "user.name=switchboard", "-c", "user.email=switchboard@example.invalid", "commit", "-qm", "init"]);
+  git(["-c", "user.name=delegit", "-c", "user.email=delegit@example.invalid", "commit", "-qm", "init"]);
   return dir;
 }
 
@@ -95,11 +95,11 @@ function porcelain(dir) {
 
 function runCheck(cli, kind, opts) {
   const repo = freshRepo();
-  const out = mkdtempSync(join(tmpdir(), "switchboard-verify-out-"));
+  const out = mkdtempSync(join(tmpdir(), "delegit-verify-out-"));
   const briefPath = join(out, "..", `${out.split(/[\\/]/).pop()}-brief.txt`);
   writeFileSync(briefPath, kind === "read-only" ? READ_BRIEF : WRITE_BRIEF);
   const args = [
-    join(root, "skills", `switchboard-${cli.key}`, "scripts", "relay.mjs"),
+    join(root, "skills", `delegit-${cli.key}`, "scripts", "relay.mjs"),
     "--brief", briefPath, "--cd", repo, "--out-dir", out, "--timeout", opts.timeout,
     ...(kind === "read-only" ? [cli.readOnlyFlag] : []),
     ...(opts.extra[cli.key] || []),
@@ -122,11 +122,11 @@ function runCheck(cli, kind, opts) {
     passed = result.status === "completed" && (tripwire === undefined ? status === "" : tripwire === false);
     detail = `status ${result.status}, tree ${status === "" ? "unchanged" : "CHANGED"}, readOnlyViolation ${tripwire ?? "n/a"}`;
   } else {
-    const file = join(repo, "switchboard-check.txt");
+    const file = join(repo, "delegit-check.txt");
     const content = existsSync(file) ? readFileSync(file, "utf8").trim() : null;
-    const reported = (result.touchedFiles || []).some((line) => line.includes("switchboard-check.txt"));
-    passed = result.status === "completed" && content === "switchboard ok" && reported;
-    detail = `status ${result.status}, switchboard-check.txt ${content === null ? "missing" : JSON.stringify(content)}, touchedFiles ${reported ? "reports it" : "does not report it"}`;
+    const reported = (result.touchedFiles || []).some((line) => line.includes("delegit-check.txt"));
+    passed = result.status === "completed" && content === "delegit ok" && reported;
+    detail = `status ${result.status}, delegit-check.txt ${content === null ? "missing" : JSON.stringify(content)}, touchedFiles ${reported ? "reports it" : "does not report it"}`;
   }
   const record = {
     kind,
@@ -188,7 +188,7 @@ function main() {
   }
 
   const date = new Date().toISOString().slice(0, 10);
-  const doc = { schema: "switchboard-verify.v1", date, platform: platformName, osRelease: release(), node: process.version, results };
+  const doc = { schema: "delegit-verify.v1", date, platform: platformName, osRelease: release(), node: process.version, results };
   mkdirSync(opts.out, { recursive: true });
   const base = join(opts.out, `verify-${date}-${platform()}`);
   writeFileSync(`${base}.json`, `${JSON.stringify(doc, null, 2)}\n`);
@@ -196,7 +196,7 @@ function main() {
     const parts = entry.checks.map((check) => (check.kind === "read-only"
       ? `a \`--read-only\` dispatch ${check.passed ? "completed with no read-only violation" : `did NOT pass (${check.detail})`}`
       : `a write dispatch ${check.passed ? "created the briefed file and reported it in `touchedFiles`" : `did NOT pass (${check.detail})`}`));
-    return `- \`${entry.skill}\` — ${platformName}, \`${entry.binary}\` ${entry.version}: ${parts.join("; ")} (Switchboard live check, ${date}).`;
+    return `- \`${entry.skill}\` — ${platformName}, \`${entry.binary}\` ${entry.version}: ${parts.join("; ")} (Delegit live check, ${date}).`;
   });
   writeFileSync(`${base}.md`, `${lines.join("\n")}\n`);
   process.stdout.write(`\nresults: ${base}.json\nREADME lines: ${base}.md\n`);

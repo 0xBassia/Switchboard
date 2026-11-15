@@ -22,10 +22,10 @@
     <circle cx="19" cy="36" r="6.2" fill="#0c0d10" stroke="#c8a24a" stroke-width="2.8"/>
     <path d="M19 36 C19 63 53 65 53 54" fill="none" stroke="#ffb020" stroke-width="4.5" stroke-linecap="round"/>
     <circle cx="53" cy="54" r="5.6" fill="#ffb020"/>
-    <text x="96" y="54" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="52" letter-spacing="4" fill="#efe9dc">SWITCHBOARD</text>
+    <text x="96" y="54" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="52" letter-spacing="4" fill="#efe9dc">DELEGIT</text>
   </g>
   <text x="80" y="320" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="104" fill="#efe9dc">HAND OFF THE CODE.</text>
   <text x="80" y="428" font-family="'Big Shoulders Display','Arial Narrow',Arial,sans-serif" font-weight="900" font-size="104" fill="#ffb020">KEEP THE JUDGMENT.</text>
   <text x="80" y="512" font-family="'IBM Plex Sans','Segoe UI',Arial,sans-serif" font-size="29" fill="#ece6d8">Route tasks to 7 CLI coding agents. Review every diff. Land it yourself.</text>
-  <text x="80" y="570" font-family="'IBM Plex Mono',Menlo,monospace" font-size="24" fill="#ffb020">$ npx skills add 0xBassia/switchboard</text>
+  <text x="80" y="570" font-family="'IBM Plex Mono',Menlo,monospace" font-size="24" fill="#ffb020">$ npx skills add 0xBassia/delegit</text>
 </svg>

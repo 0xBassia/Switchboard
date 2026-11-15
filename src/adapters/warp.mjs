@@ -1,5 +1,5 @@
 /**
- * Switchboard · switchboard-warp · relay.mjs
+ * Delegit · delegit-warp · relay.mjs
  *
  * Dispatch a self-contained brief to the Warp Agent CLI (`oz agent run
  * --output-format ndjson`), capture the newline-delimited JSON event stream,
@@ -47,7 +47,7 @@
  * Options:
  *   --brief <file>          Path to the brief. If omitted, read it from stdin.
  *   --cd <dir>              Working root for oz (default: current directory).
- *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from delegit-setup config (dials apply; explicit flags win).
  *   --model <id>            Warp model id (default: Warp's own). See `oz model list`.
  *   --profile <id>          Warp agent profile id.
  *   --name <name>           Label for the run (Warp's `--name`).

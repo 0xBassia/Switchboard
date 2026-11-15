@@ -5,11 +5,11 @@ import { spawn } from "node:child_process";
 import { constants } from "node:os";
 import { isAbsolute } from "node:path";
 
-// Switchboard runs on macOS, Linux and WSL. Native Windows is refused up front,
+// Delegit runs on macOS, Linux and WSL. Native Windows is refused up front,
 // before any artifact exists, rather than half-supported.
 export function refuseNativeWindows() {
   if (process.platform !== "win32") return;
-  process.stderr.write("switchboard: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
+  process.stderr.write("delegit: native Windows is not supported; run it inside WSL (https://learn.microsoft.com/windows/wsl/)\n");
   process.exit(2);
 }
 

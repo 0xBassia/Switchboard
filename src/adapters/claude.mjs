@@ -1,5 +1,5 @@
 /**
- * Switchboard · switchboard-claude · relay.mjs
+ * Delegit · delegit-claude · relay.mjs
  *
  * Dispatch a self-contained brief to a separate Claude Code CLI process
  * (`claude -p`), capture the structured stream, and write a stable result the
@@ -13,7 +13,7 @@
  *
  * The relay never commits. Its write-capable profiles use string rules to deny
  * common direct forms of `git commit`, `git push`, and nested `claude`, plus
- * any command containing `switchboard-claude`. Aliases, scripts, and wrappers can
+ * any command containing `delegit-claude`. Aliases, scripts, and wrappers can
  * bypass those speed bumps; the brief's no-commit instruction and orchestrator
  * review remain the boundary. The orchestrator re-runs the project gates and
  * lands the work.
@@ -52,7 +52,7 @@
  * Options:
  *   --brief <file>                    Brief path. Omit to read the brief from stdin.
  *   --cd <dir>                        Child cwd (default: current directory).
- *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from delegit-setup config (dials apply; explicit flags win).
  *   --out-dir <dir>                   Artifact directory (default: system temp).
  *   --timeout <dur>                   Relay watchdog; off by default. Use h/m/s,
  *                                     such as 30m, 90s, or 1h30m.
@@ -82,7 +82,7 @@
  *   final.txt       final result event's text
  *   stderr.txt      complete Claude stderr
  *   profile.json    inspectable per-run settings passed with --settings
- *   result.json     switchboard-relay.result.v1
+ *   result.json     delegit-relay.result.v1
  *
  * Exit codes: usage errors exit 2 before result.json; a missing `claude` exits
  * 127 with status "claude_unavailable"; otherwise the exit mirrors Claude, with
@@ -150,7 +150,7 @@ function profileSettings(opts) {
             // single-wildcard forms also catch `git -C <dir> push`; they also
             // deny reads like `git log --grep push`. Anchor `claude` at command
             // position so reads mentioning it remain allowed. Keep
-            // `switchboard-claude` as a substring rule to stop recursive relay
+            // `delegit-claude` as a substring rule to stop recursive relay
             // invocation; any command containing it is denied.
             `${shell}(git commit *)`,
             `${shell}(git * commit *)`,
@@ -159,7 +159,7 @@ function profileSettings(opts) {
             `${shell}(git * push *)`,
             `${shell}(git * push)`,
             `${shell}(claude *)`,
-            `${shell}(*switchboard-claude*)`,
+            `${shell}(*delegit-claude*)`,
           ],
     },
     ...(!opts.readOnly

@@ -1,5 +1,5 @@
 /**
- * Switchboard · switchboard-opencode · relay.mjs
+ * Delegit · delegit-opencode · relay.mjs
  *
  * Dispatch a self-contained brief to the OpenCode CLI (`opencode run`),
  * capture the run, and write a structured result the orchestrating agent can
@@ -31,7 +31,7 @@
  * Options:
  *   --brief <file>          Path to the brief. If omitted, the brief is read from stdin.
  *   --cd <dir>              Working root for OpenCode (default: current directory).
- *   --lane <name>           Fleet lane from switchboard-setup config (dials apply; explicit flags win).
+ *   --lane <name>           Fleet lane from delegit-setup config (dials apply; explicit flags win).
  *   --model <name>          Model as provider/model, or provider/model#variant on opencode 2.x.
  *                           REQUIRED for a fresh run — OpenCode has no
  *                           safe default; a resumed run inherits its session's model.
@@ -79,7 +79,7 @@ import { tripwire } from "../core/tripwire.mjs";
 // for a flag. The model token may carry a variant suffix (provider/model#variant on
 // opencode 2.x), and catalog ids carry '@' (Workers AI @cf/..., Vertex model@default,
 // region@eu) and '~' (OpenRouter/Kilo ~vendor/model-latest aliases). Keep SAFE_TOKEN in lockstep with
-// switchboard-setup MODEL_TOKEN.shellSafe, and MODEL_TOKEN with MODEL_TOKEN.opencode.
+// delegit-setup MODEL_TOKEN.shellSafe, and MODEL_TOKEN with MODEL_TOKEN.opencode.
 const SAFE_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 const MODEL_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._:@~/#-]*$/;
 

@@ -1,6 +1,6 @@
 # Relay sources
 
-Every `skills/switchboard-<name>/scripts/relay.mjs` is **generated**. Edit the sources here, then run:
+Every `skills/delegit-<name>/scripts/relay.mjs` is **generated**. Edit the sources here, then run:
 
 ```sh
 node tools/build.mjs            # rebuild every relay
@@ -17,7 +17,7 @@ carries no dead code.
 src/core/      shared engine (Node built-ins only)
   relay.mjs      runRelay: intake → lane → artifacts → preflight → supervise → result
   cli.mjs        spec-driven flags, --help from the header comment, brief intake
-  lane.mjs       fleet lane resolution through switchboard-setup
+  lane.mjs       fleet lane resolution through delegit-setup
   proc.mjs       process-group launch, tree kill, async version probe
   run.mjs        run directory, atomic result.json, stdout summary
   scan.mjs       JSON-object and JSONL stream scanners, stderr tail

@@ -1,4 +1,4 @@
-// Switchboard · test/core.test.mjs
+// Delegit · test/core.test.mjs
 //
 // Unit tests for src/core and the relay bundler. Node built-ins only:
 //   node --test test/core.test.mjs
@@ -59,7 +59,7 @@ test("bundler keeps only reachable code and rejects bad sources", () => {
     mkdirSync(join(temp, "tools"));
     mkdirSync(join(temp, "src", "adapters"), { recursive: true });
     mkdirSync(join(temp, "src", "core"));
-    mkdirSync(join(temp, "skills", "switchboard-demo", "scripts"), { recursive: true });
+    mkdirSync(join(temp, "skills", "delegit-demo", "scripts"), { recursive: true });
     copyFileSync(join(root, "tools", "build.mjs"), join(temp, "tools", "build.mjs"));
     writeFileSync(join(temp, "src", "core", "lib.mjs"), [
       'import { join } from "node:path";',
@@ -84,9 +84,9 @@ test("bundler keeps only reachable code and rejects bad sources", () => {
     ].join("\n"));
     const built = spawnSync(process.execPath, [join(temp, "tools", "build.mjs")], { encoding: "utf8" });
     assert.equal(built.status, 0, built.stderr);
-    const out = spawnSync(process.execPath, [join(temp, "skills", "switchboard-demo", "scripts", "relay.mjs")], { encoding: "utf8" });
+    const out = spawnSync(process.execPath, [join(temp, "skills", "delegit-demo", "scripts", "relay.mjs")], { encoding: "utf8" });
     assert.equal(out.stdout.trim(), join("a", "b"));
-    const source = readFileSync(join(temp, "skills", "switchboard-demo", "scripts", "relay.mjs"), "utf8");
+    const source = readFileSync(join(temp, "skills", "delegit-demo", "scripts", "relay.mjs"), "utf8");
     assert.doesNotMatch(source, /function unused/);
     assert.doesNotMatch(source, /tmpdir/);
     writeFileSync(join(temp, "src", "adapters", "demo.mjs"), '/**\n * x\n */\nimport fs from "node:fs";\nfs;\n');
